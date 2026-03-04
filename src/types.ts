@@ -1,7 +1,7 @@
 export type Role = 'admin' | 'user';
 
 export interface User {
-  id: number;
+  id: string;
   username: string;
   role: Role;
   name: string;
@@ -9,8 +9,8 @@ export interface User {
 }
 
 export interface VisitLog {
-  id: number;
-  user_id: number;
+  id: string;
+  user_id: string;
   user_name?: string;
   client_name: string;
   date_from: string;
