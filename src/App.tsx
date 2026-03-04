@@ -130,6 +130,12 @@ export default function App() {
   const fetchData = async () => {
     if (!user) return;
     
+    // Refresh sliding session
+    localStorage.setItem('visit_tracker_session', JSON.stringify({
+      user: user,
+      timestamp: Date.now()
+    }));
+    
     try {
       // Fetch Stats
       const statsRes = await fetch(`/api/stats?userId=${user.id}&role=${user.role}`);
@@ -162,6 +168,24 @@ export default function App() {
       setResetToken(token);
       setAuthMode('reset');
     }
+
+    // Session Recovery
+    const savedSession = localStorage.getItem('visit_tracker_session');
+    if (savedSession) {
+      try {
+        const { user: savedUser, timestamp } = JSON.parse(savedSession);
+        const now = Date.now();
+        const thirtyMinutes = 30 * 60 * 1000;
+        
+        if (now - timestamp < thirtyMinutes) {
+          setUser(savedUser);
+        } else {
+          localStorage.removeItem('visit_tracker_session');
+        }
+      } catch (e) {
+        localStorage.removeItem('visit_tracker_session');
+      }
+    }
   }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -177,6 +201,11 @@ export default function App() {
       if (res.ok) {
         const userData = await res.json();
         setUser(userData);
+        // Save session
+        localStorage.setItem('visit_tracker_session', JSON.stringify({
+          user: userData,
+          timestamp: Date.now()
+        }));
       } else {
         const err = await res.json();
         setLoginError(err.error || 'Invalid username or password');
@@ -605,7 +634,10 @@ export default function App() {
             </div>
           </div>
           <button 
-            onClick={() => setUser(null)}
+            onClick={() => {
+              setUser(null);
+              localStorage.removeItem('visit_tracker_session');
+            }}
             className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-red-500 hover:bg-red-50 transition-all font-medium"
           >
             <LogOut size={20} />
