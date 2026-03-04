@@ -1,26 +1,26 @@
 import express from "express";
 import { createServer as createViteServer } from "vite";
-import Database from "better-sqlite3";
 import path from "path";
 import fs from "fs";
 import crypto from "crypto";
 import { Resend } from "resend";
+import * as admin from "firebase-admin";
 
-const dbPath = process.env.DATABASE_PATH || "tracker.db";
-
-// Ensure the directory exists if it's a custom path (like /data/tracker.db on Render)
-if (dbPath.includes('/') && !fs.existsSync(path.dirname(dbPath))) {
-  try {
-    fs.mkdirSync(path.dirname(dbPath), { recursive: true });
-  } catch (err) {
-    console.error("Failed to create database directory:", err);
-  }
+// Firebase Admin Setup
+if (!admin.apps.length) {
+  admin.initializeApp({
+    credential: admin.credential.cert({
+      projectId: "client-visit-tracker-5778e",
+      clientEmail: "firebase-adminsdk-fbsvc@client-visit-tracker-5778e.iam.gserviceaccount.com",
+      privateKey: "-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQDG7wphs1s3kSLp\nl6nb79qUfBYjyfDqfNRUueeHN/vButjjGq6vJKnB0Oii1Bd9Jdas8ZPF4zw7LWqD\nYjYrAEzvNMtgLcJauwZdOp14+PXWwLOJt6yCeZPX15GQsRjSzFqGW+74V3KUmJ4w\nzcvI4WCncjvFXr5mRR4M55n6rU2a2SMbzIRMzVhA/5SSpGFTO+RsQl3vkyA7y7RE\ne+bVdK5YKxSYbmVTgvQB4pL66W8GP1oh8sC8qtBziZd87pAugDcZAizL177bK7qO\n7iCSVQ4jZgGDQyTLfy3PkovFhpzULgry6DJJxc+PJUexkXnVSncNfEwHQxoOKaeb\naGtvYsSfAgMBAAECggEAHQz6bKMXDonM2eTygrJHrshiKU7LtkqNbWQKmhYEV1m0\nY5HZca0+dxXNaz3iwj1c2Luck1joSlILDG2ysFvmYEZK7twv1jUarFGrfmeI6xgP\n/+wJLrKXcv1BfipGkD4UeCuDvdNzYZzZ+RGMkWTMSxek/+Eil+e/CC5oL5HQU+zg\nyNCd3DhpsdPo7W4/Pn7Oh+EMzb/JLfge1Rs8f9GpxC9hZOgDoyFNT/qycQifK+3Y\nbxQ1eUFvT8sxSxzL/9x5a6ffBaF6cnQ/k9tVEtQym4APHAADT7Pbkc0skbGhV6AK\nuRvq2gwFrcV3XtrZf0Bb6M8baJoiSTD6w2QZwU50dQKBgQDiW6EZoZprkzW0ALb6\n7r2UztQiYr5bl6WHN3yoaqPeeUFPtbdGYW+UNbp2tQnSxNJFmfONkz8WSzV5RM59\nMvfNkYuIkX0UkXeLcm9hW0Ms0/lYF8VMlro+XhULPmr5VcuKzd+NJuHAlIQkS1hK\nvlD0VsFQ9/mAa+KhNjqWIvS1xQKBgQDg/Ayw4CCrsw4pBgocNiLh92Xy7q0TIQE6\nTHvPeZA2EaAFNX378Nw4Nwt9xDF7r/34FfncrwU8swIJbV3SJwb3iQ+BqxnByeER\nWbLsJh3/wi+eMnkddAMvn3p4MvNhcaRcPl/jNT5zRBrNO42UoC/R4sx3+KgloPWr\nZii09i+bEwKBgQCNDpyt5E7eirYEng1pAi2R9fGsG+yUF0RHpwQ/z3SexuE0UwEL\nEtz9dx3jq52bgpumU/G6X/AIbIW+NGqZCpHxwKk7Sa6wipX8iCtwd/a8kLvpcaa5\nu5QEGYzznMn85sIYlYKh64DzCZnvJCS5LzAzk3yUgHMy3Ag2fhy0QsRMIQKBgEJA\nlvAjIBvPv5S/DY0fOAh41RHDzT2702O6kB8Zuijh6dB+3xmo5QC83OptMvEsc0py\nFkExXQZx5GCoTx+KlJeiSemyXARgEaINWw4Fb4IYSfN5A4dz2VhVyzfIMTl5wJ/V\nUmFTFY/V91qGdfvVbB+PfQy7MbDbBF0z2Tro4D33AoGBALQMPmFozs8rYfB+783d\n9JBZbgrhRctCxmkGdRENdVmZzLxfd5Rv7JpMgG9bbLXYjvcApXE+Z7E2RbP9Gy8M\neBZPU/YYgKMxqc0+Vist4pGgMtKOtp9QSTgfBmW33LU0jxw26aTcqkoiaRlftjjM\nmr5LXSxzmkI0dKNYlKdEN1VM\n-----END PRIVATE KEY-----\n",
+    }),
+  });
 }
 
-const db = new Database(dbPath);
+const db = admin.firestore();
 
 // Resend Setup
-const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
+const resend = new Resend('re_NfDLyKq5_FwsNgo2kRqMK7dPXB2hTggVj');
 
 async function sendMail({ to, subject, text, html }: { to: string, subject: string, text: string, html: string }) {
   if (!resend) {
@@ -47,65 +47,29 @@ async function sendMail({ to, subject, text, html }: { to: string, subject: stri
   }
 }
 
-// Initialize Database
-db.exec(`
-  CREATE TABLE IF NOT EXISTS users (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    username TEXT UNIQUE,
-    password TEXT,
-    role TEXT CHECK(role IN ('admin', 'user')) DEFAULT 'user',
-    name TEXT,
-    status TEXT DEFAULT 'active',
-    invitation_token TEXT,
-    reset_token TEXT,
-    reset_token_expiry DATETIME
-  );
-
-  CREATE TABLE IF NOT EXISTS visit_logs (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER,
-    client_name TEXT,
-    date_from TEXT,
-    date_to TEXT,
-    purpose TEXT CHECK(purpose IN ('Installation', 'Exam Support')),
-    systems_installed INTEGER,
-    students_enrolled INTEGER,
-    students_attended INTEGER,
-    remarks TEXT,
-    travel_cost REAL DEFAULT 0,
-    lodging_cost REAL DEFAULT 0,
-    misc_expense REAL DEFAULT 0,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY(user_id) REFERENCES users(id)
-  );
-`);
-
-// Simple Migration: Ensure columns exist if table was created before
-const columnsToAdd = [
-  { name: 'status', type: 'TEXT DEFAULT "active"' },
-  { name: 'invitation_token', type: 'TEXT' },
-  { name: 'reset_token', type: 'TEXT' },
-  { name: 'reset_token_expiry', type: 'DATETIME' }
-];
-
-for (const col of columnsToAdd) {
-  try {
-    db.exec(`ALTER TABLE users ADD COLUMN ${col.name} ${col.type}`);
-  } catch (e) {
-    // Column might already exist, ignore error
-  }
-}
-
 // Seed Admin if not exists
-const adminEmail = "shuvansathieshvt@gmail.com";
-const adminExists = db.prepare("SELECT * FROM users WHERE username = ?").get(adminEmail);
-if (!adminExists) {
-  // Check if old 'admin' exists and update it, or insert new
-  const oldAdmin = db.prepare("SELECT * FROM users WHERE username = 'admin'").get();
-  if (oldAdmin) {
-    db.prepare("UPDATE users SET username = ? WHERE username = 'admin'").run(adminEmail);
-  } else {
-    db.prepare("INSERT INTO users (username, password, role, name, status) VALUES (?, ?, ?, ?, ?)").run(adminEmail, "admin123", "admin", "System Administrator", "active");
+async function seedAdmin() {
+  if (!db) return;
+  const adminEmail = "shuvansathieshvt@gmail.com";
+  const usersRef = db.collection('users');
+  const snapshot = await usersRef.where('username', '==', adminEmail).get();
+  
+  if (snapshot.empty) {
+    // Check for old 'admin'
+    const oldAdminSnapshot = await usersRef.where('username', '==', 'admin').get();
+    if (!oldAdminSnapshot.empty) {
+      const oldAdminDoc = oldAdminSnapshot.docs[0];
+      await oldAdminDoc.ref.update({ username: adminEmail });
+    } else {
+      await usersRef.add({
+        username: adminEmail,
+        password: "admin123",
+        role: "admin",
+        name: "System Administrator",
+        status: "active",
+        created_at: admin.firestore.FieldValue.serverTimestamp()
+      });
+    }
   }
 }
 
@@ -115,13 +79,24 @@ async function startServer() {
 
   app.use(express.json());
 
+  if (db) {
+    await seedAdmin();
+  }
+
   // --- API Routes ---
 
   // Auth
-  app.post("/api/login", (req, res) => {
+  app.post("/api/login", async (req, res) => {
+    if (!db) return res.status(500).json({ error: "Database not connected" });
     const { username, password } = req.body;
-    const user = db.prepare("SELECT id, username, role, name, status FROM users WHERE username = ? AND password = ?").get(username, password);
-    if (user) {
+    const snapshot = await db.collection('users')
+      .where('username', '==', username)
+      .where('password', '==', password)
+      .get();
+
+    if (!snapshot.empty) {
+      const userDoc = snapshot.docs[0];
+      const user = { id: userDoc.id, ...userDoc.data() } as any;
       if (user.status === 'pending') {
         return res.status(403).json({ error: "Account not activated. Please check your email." });
       }
@@ -131,15 +106,21 @@ async function startServer() {
     }
   });
 
-  app.post("/api/auth/forgot-password", (req, res) => {
+  app.post("/api/auth/forgot-password", async (req, res) => {
+    if (!db) return res.status(500).json({ error: "Database not connected" });
     const { username } = req.body;
-    const user = db.prepare("SELECT id FROM users WHERE username = ?").get(username);
-    if (!user) return res.status(404).json({ error: "User not found" });
+    const snapshot = await db.collection('users').where('username', '==', username).get();
+    
+    if (snapshot.empty) return res.status(404).json({ error: "User not found" });
+    const userDoc = snapshot.docs[0];
 
     const token = crypto.randomBytes(20).toString('hex');
     const expiry = new Date(Date.now() + 5 * 60 * 1000).toISOString(); // 5 mins
 
-    db.prepare("UPDATE users SET reset_token = ?, reset_token_expiry = ? WHERE id = ?").run(token, expiry, user.id);
+    await userDoc.ref.update({
+      reset_token: token,
+      reset_token_expiry: expiry
+    });
     
     const appUrl = process.env.APP_URL || `http://localhost:3000`;
     const resetLink = `${appUrl}/reset-password?token=${token}`;
@@ -162,27 +143,53 @@ async function startServer() {
     res.json({ success: true, message: "Reset link sent to your email (valid for 5 mins)" });
   });
 
-  app.post("/api/auth/reset-password", (req, res) => {
+  app.post("/api/auth/reset-password", async (req, res) => {
+    if (!db) return res.status(500).json({ error: "Database not connected" });
     const { token, password } = req.body;
-    const user = db.prepare("SELECT id FROM users WHERE reset_token = ? AND reset_token_expiry > ?").get(token, new Date().toISOString());
+    const now = new Date().toISOString();
     
-    if (!user) return res.status(400).json({ error: "Invalid or expired reset token" });
+    const snapshot = await db.collection('users')
+      .where('reset_token', '==', token)
+      .where('reset_token_expiry', '>', now)
+      .get();
+    
+    if (snapshot.empty) return res.status(400).json({ error: "Invalid or expired reset token" });
+    const userDoc = snapshot.docs[0];
 
-    db.prepare("UPDATE users SET password = ?, reset_token = NULL, reset_token_expiry = NULL WHERE id = ?").run(password, user.id);
+    await userDoc.ref.update({
+      password: password,
+      reset_token: admin.firestore.FieldValue.delete(),
+      reset_token_expiry: admin.firestore.FieldValue.delete()
+    });
     res.json({ success: true });
   });
 
   // User Management
-  app.get("/api/users", (req, res) => {
-    const users = db.prepare("SELECT id, username, role, name, status FROM users").all();
+  app.get("/api/users", async (req, res) => {
+    if (!db) return res.status(500).json({ error: "Database not connected" });
+    const snapshot = await db.collection('users').get();
+    const users = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     res.json(users);
   });
 
-  app.post("/api/users/invite", (req, res) => {
+  app.post("/api/users/invite", async (req, res) => {
+    if (!db) return res.status(500).json({ error: "Database not connected" });
     const { username, role } = req.body;
     const token = crypto.randomBytes(20).toString('hex');
+    
+    const existingSnapshot = await db.collection('users').where('username', '==', username).get();
+    if (!existingSnapshot.empty) {
+      return res.status(400).json({ error: "User already exists" });
+    }
+
     try {
-      db.prepare("INSERT INTO users (username, role, status, invitation_token) VALUES (?, ?, ?, ?)").run(username, role, 'pending', token);
+      await db.collection('users').add({
+        username,
+        role,
+        status: 'pending',
+        invitation_token: token,
+        created_at: admin.firestore.FieldValue.serverTimestamp()
+      });
       
       const appUrl = process.env.APP_URL || `http://localhost:3000`;
       const inviteLink = `${appUrl}/activate?token=${token}`;
@@ -204,139 +211,139 @@ async function startServer() {
 
       res.json({ success: true });
     } catch (e) {
-      res.status(400).json({ error: "User already exists" });
+      res.status(400).json({ error: "Error creating user" });
     }
   });
 
-  app.post("/api/users/activate", (req, res) => {
+  app.post("/api/users/activate", async (req, res) => {
+    if (!db) return res.status(500).json({ error: "Database not connected" });
     const { token, name, password } = req.body;
-    const user = db.prepare("SELECT id FROM users WHERE invitation_token = ?").get(token);
-    if (!user) return res.status(400).json({ error: "Invalid invitation token" });
+    const snapshot = await db.collection('users').where('invitation_token', '==', token).get();
+    
+    if (snapshot.empty) return res.status(400).json({ error: "Invalid invitation token" });
+    const userDoc = snapshot.docs[0];
 
-    db.prepare("UPDATE users SET name = ?, password = ?, status = 'active', invitation_token = NULL WHERE id = ?").run(name, password, user.id);
+    await userDoc.ref.update({
+      name,
+      password,
+      status: 'active',
+      invitation_token: admin.firestore.FieldValue.delete()
+    });
     res.json({ success: true });
   });
 
-  app.put("/api/users/:id", (req, res) => {
+  app.put("/api/users/:id", async (req, res) => {
+    if (!db) return res.status(500).json({ error: "Database not connected" });
     const { id } = req.params;
     const { username, role } = req.body;
     try {
-      db.prepare("UPDATE users SET username = ?, role = ? WHERE id = ?").run(username, role, id);
+      await db.collection('users').doc(id).update({ username, role });
       res.json({ success: true });
     } catch (e) {
-      res.status(400).json({ error: "Username already exists" });
+      res.status(400).json({ error: "Error updating user" });
     }
   });
 
-  app.delete("/api/users/:id", (req, res) => {
-    db.prepare("DELETE FROM users WHERE id = ?").run(req.params.id);
+  app.delete("/api/users/:id", async (req, res) => {
+    if (!db) return res.status(500).json({ error: "Database not connected" });
+    await db.collection('users').doc(req.params.id).delete();
     res.json({ success: true });
   });
 
   // Visit Logs
-  app.get("/api/logs", (req, res) => {
+  app.get("/api/logs", async (req, res) => {
+    if (!db) return res.status(500).json({ error: "Database not connected" });
     const { userId, role, employeeId } = req.query;
-    let logs;
-    let query = `
-      SELECT visit_logs.*, users.name as user_name 
-      FROM visit_logs 
-      JOIN users ON visit_logs.user_id = users.id
-    `;
-    let params: any[] = [];
+    
+    let query: admin.firestore.Query = db.collection('visit_logs');
 
     if (role === 'admin') {
       if (employeeId && employeeId !== 'All') {
-        query += " WHERE visit_logs.user_id = ?";
-        params.push(employeeId);
+        query = query.where('user_id', '==', employeeId);
       }
     } else {
-      query += " WHERE visit_logs.user_id = ?";
-      params.push(userId);
+      query = query.where('user_id', '==', userId);
     }
 
-    query += " ORDER BY date_from DESC";
-    logs = db.prepare(query).all(...params);
+    const snapshot = await query.orderBy('date_from', 'desc').get();
+    
+    // Fetch user names for logs
+    const logs = await Promise.all(snapshot.docs.map(async doc => {
+      const data = doc.data();
+      const userDoc = await db!.collection('users').doc(data.user_id).get();
+      return { 
+        id: doc.id, 
+        ...data, 
+        user_name: userDoc.exists ? (userDoc.data() as any).name : 'Unknown' 
+      };
+    }));
+    
     res.json(logs);
   });
 
-  app.post("/api/logs", (req, res) => {
-    const { 
-      user_id, client_name, date_from, date_to, purpose, 
-      systems_installed, students_enrolled, students_attended, 
-      remarks, travel_cost, lodging_cost, misc_expense 
-    } = req.body;
-    
-    const result = db.prepare(`
-      INSERT INTO visit_logs (
-        user_id, client_name, date_from, date_to, purpose, 
-        systems_installed, students_enrolled, students_attended, 
-        remarks, travel_cost, lodging_cost, misc_expense
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
-      user_id, client_name, date_from, date_to, purpose, 
-      systems_installed || null, students_enrolled || null, students_attended || null, 
-      remarks, travel_cost || 0, lodging_cost || 0, misc_expense || 0
-    );
-    res.json({ id: result.lastInsertRowid });
+  app.post("/api/logs", async (req, res) => {
+    if (!db) return res.status(500).json({ error: "Database not connected" });
+    const logData = req.body;
+    const docRef = await db.collection('visit_logs').add({
+      ...logData,
+      created_at: admin.firestore.FieldValue.serverTimestamp()
+    });
+    res.json({ id: docRef.id });
   });
 
-  app.put("/api/logs/:id", (req, res) => {
+  app.put("/api/logs/:id", async (req, res) => {
+    if (!db) return res.status(500).json({ error: "Database not connected" });
     const { id } = req.params;
-    const { 
-      client_name, date_from, date_to, purpose, 
-      systems_installed, students_enrolled, students_attended, 
-      remarks, travel_cost, lodging_cost, misc_expense 
-    } = req.body;
-
-    db.prepare(`
-      UPDATE visit_logs SET 
-        client_name = ?, date_from = ?, date_to = ?, purpose = ?, 
-        systems_installed = ?, students_enrolled = ?, students_attended = ?, 
-        remarks = ?, travel_cost = ?, lodging_cost = ?, misc_expense = ?
-      WHERE id = ?
-    `).run(
-      client_name, date_from, date_to, purpose, 
-      systems_installed || null, students_enrolled || null, students_attended || null, 
-      remarks, travel_cost || 0, lodging_cost || 0, misc_expense || 0, id
-    );
+    const logData = req.body;
+    await db.collection('visit_logs').doc(id).update(logData);
     res.json({ success: true });
   });
 
-  app.delete("/api/logs/:id", (req, res) => {
-    db.prepare("DELETE FROM visit_logs WHERE id = ?").run(req.params.id);
+  app.delete("/api/logs/:id", async (req, res) => {
+    if (!db) return res.status(500).json({ error: "Database not connected" });
+    await db.collection('visit_logs').doc(req.params.id).delete();
     res.json({ success: true });
   });
 
   // Dashboard Stats
-  app.get("/api/stats", (req, res) => {
+  app.get("/api/stats", async (req, res) => {
+    if (!db) return res.status(500).json({ error: "Database not connected" });
     const { userId, role } = req.query;
-    let stats;
-    const query = `
-      SELECT 
-        COUNT(*) as total_visits,
-        COUNT(DISTINCT client_name) as total_clients,
-        SUM(julianday(date_to) - julianday(date_from) + 1) as total_days,
-        SUM(systems_installed) as total_installations,
-        SUM(students_enrolled) as total_enrolled,
-        SUM(students_attended) as total_attended
-      FROM visit_logs
-    `;
     
-    if (role === 'admin') {
-      stats = db.prepare(query).get();
-    } else {
-      stats = db.prepare(`${query} WHERE user_id = ?`).get(userId);
+    let query: admin.firestore.Query = db.collection('visit_logs');
+    if (role !== 'admin') {
+      query = query.where('user_id', '==', userId);
     }
 
-    const totalEnrolled = stats.total_enrolled || 0;
-    const totalAttended = stats.total_attended || 0;
-    const successRate = totalEnrolled > 0 ? (totalAttended / totalEnrolled) * 100 : 0;
+    const snapshot = await query.get();
+    const logs = snapshot.docs.map(doc => doc.data());
+
+    const total_visits = logs.length;
+    const uniqueClients = new Set(logs.map(l => l.client_name));
+    const total_clients = uniqueClients.size;
+    
+    let total_days = 0;
+    let total_installations = 0;
+    let total_enrolled = 0;
+    let total_attended = 0;
+
+    logs.forEach(log => {
+      const start = new Date(log.date_from);
+      const end = new Date(log.date_to);
+      const days = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+      total_days += days;
+      total_installations += (log.systems_installed || 0);
+      total_enrolled += (log.students_enrolled || 0);
+      total_attended += (log.students_attended || 0);
+    });
+
+    const successRate = total_enrolled > 0 ? (total_attended / total_enrolled) * 100 : 0;
 
     res.json({
-      total_visits: stats.total_visits || 0,
-      total_clients: stats.total_clients || 0,
-      total_days: Math.round(stats.total_days || 0),
-      total_installations: stats.total_installations || 0,
+      total_visits,
+      total_clients,
+      total_days,
+      total_installations,
       success_rate: parseFloat(successRate.toFixed(2))
     });
   });
@@ -349,6 +356,7 @@ async function startServer() {
     });
     app.use(vite.middlewares);
   } else {
+    const __dirname = path.resolve();
     app.use(express.static(path.join(__dirname, "dist")));
     app.get("*", (req, res) => {
       res.sendFile(path.join(__dirname, "dist", "index.html"));
