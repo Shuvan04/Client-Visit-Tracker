@@ -3,7 +3,7 @@ import { createServer as createViteServer } from "vite";
 import path from "path";
 import fs from "fs";
 import crypto from "crypto";
-import nodemailer from "nodemailer";
+import { MailerSend, EmailParams, Sender, Recipient } from "mailersend";
 import { initializeApp, cert, getApps } from "firebase-admin/app";
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
 
@@ -24,28 +24,25 @@ if (!existingApps.length) {
 
 const db = getFirestore(app);
 
-// SMTP Setup (Resend)
-const transporter = nodemailer.createTransport({
-  host: "smtp.resend.com",
-  port: 465,
-  secure: true,
-  auth: {
-    user: "resend",
-    pass: "re_NfDLyKq5_FwsNgo2kRqMK7dPXB2hTggVj",
-  },
+// MailerSend Setup
+const mailersend = new MailerSend({
+  apiKey: 'mlsn.4ffea856c0a78b27b10757be13ec4fb6498e7890d95218b247657abeb7491a60',
 });
 
 async function sendMail({ to, subject, text, html }: { to: string, subject: string, text: string, html: string }) {
+  const sentFrom = new Sender("noreply@test-z0vklo6v8d7l7qrx.mlsender.net", "Client Tracker");
+  const recipients = [new Recipient(to)];
+
+  const emailParams = new EmailParams()
+    .setFrom(sentFrom)
+    .setTo(recipients)
+    .setSubject(subject)
+    .setHtml(html)
+    .setText(text);
+
   try {
-    const info = await transporter.sendMail({
-      from: process.env.MAIL_FROM || 'noreply@client-tracker.iamneo.com',
-      to,
-      subject,
-      text,
-      html
-    });
-    
-    console.log(`[EMAIL SENT] Message ID: ${info.messageId} To: ${to}`);
+    await mailersend.email.send(emailParams);
+    console.log(`[EMAIL SENT] To: ${to}`);
   } catch (error) {
     console.error(`[EMAIL ERROR] Failed to send to ${to}:`, error);
   }
