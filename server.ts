@@ -4,11 +4,11 @@ import path from "path";
 import fs from "fs";
 import crypto from "crypto";
 import { Resend } from "resend";
-import { initializeApp, cert, getApps, App } from "firebase-admin/app";
-import { getFirestore, FieldValue, Firestore } from "firebase-admin/firestore";
+import { initializeApp, cert, getApps } from "firebase-admin/app";
+import { getFirestore, FieldValue } from "firebase-admin/firestore";
 
 // Firebase Admin Setup
-let app: App;
+let app;
 const existingApps = getApps();
 if (!existingApps.length) {
   app = initializeApp({
