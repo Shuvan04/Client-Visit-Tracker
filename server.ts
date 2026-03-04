@@ -27,7 +27,7 @@ async function sendMail({ to, subject, text, html }: { to: string, subject: stri
   }
   try {
     await transporter.sendMail({
-      from: process.env.SMTP_FROM || 'noreply@example.com',
+      from: process.env.SMTP_FROM || 'shuvansathieshvt@gmail.com',
       to,
       subject,
       text,
