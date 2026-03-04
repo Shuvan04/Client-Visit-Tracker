@@ -3,7 +3,7 @@ import { createServer as createViteServer } from "vite";
 import path from "path";
 import fs from "fs";
 import crypto from "crypto";
-import { Resend } from "resend";
+import nodemailer from "nodemailer";
 import { initializeApp, cert, getApps } from "firebase-admin/app";
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
 
@@ -24,29 +24,28 @@ if (!existingApps.length) {
 
 const db = getFirestore(app);
 
-// Resend Setup
-const resend = new Resend('re_NfDLyKq5_FwsNgo2kRqMK7dPXB2hTggVj');
+// SMTP Setup (Resend)
+const transporter = nodemailer.createTransport({
+  host: "smtp.resend.com",
+  port: 465,
+  secure: true,
+  auth: {
+    user: "resend",
+    pass: "re_NfDLyKq5_FwsNgo2kRqMK7dPXB2hTggVj",
+  },
+});
 
 async function sendMail({ to, subject, text, html }: { to: string, subject: string, text: string, html: string }) {
-  if (!resend) {
-    console.warn("RESEND_API_KEY not configured. Email not sent to " + to + ". Check console for links.");
-    console.log(`[SIMULATED EMAIL] To: ${to}\nSubject: ${subject}\nText: ${text}`);
-    return;
-  }
   try {
-    const { data, error } = await resend.emails.send({
+    const info = await transporter.sendMail({
       from: process.env.MAIL_FROM || 'noreply@client-tracker.iamneo.com',
-      to: [to],
+      to,
       subject,
       text,
       html
     });
     
-    if (error) {
-      throw error;
-    }
-    
-    console.log(`[EMAIL SENT] ID: ${data?.id} To: ${to}`);
+    console.log(`[EMAIL SENT] Message ID: ${info.messageId} To: ${to}`);
   } catch (error) {
     console.error(`[EMAIL ERROR] Failed to send to ${to}:`, error);
   }
