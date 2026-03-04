@@ -4,36 +4,44 @@ import Database from "better-sqlite3";
 import path from "path";
 import fs from "fs";
 import crypto from "crypto";
-import nodemailer from "nodemailer";
+import { Resend } from "resend";
 
-const db = new Database("tracker.db");
+const dbPath = process.env.DATABASE_PATH || "tracker.db";
 
-// Email Transporter Setup
-const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST,
-  port: parseInt(process.env.SMTP_PORT || '587'),
-  secure: process.env.SMTP_PORT === '465',
-  auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS,
-  },
-});
+// Ensure the directory exists if it's a custom path (like /data/tracker.db on Render)
+if (dbPath.includes('/') && !fs.existsSync(path.dirname(dbPath))) {
+  try {
+    fs.mkdirSync(path.dirname(dbPath), { recursive: true });
+  } catch (err) {
+    console.error("Failed to create database directory:", err);
+  }
+}
+
+const db = new Database(dbPath);
+
+// Resend Setup
+const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 
 async function sendMail({ to, subject, text, html }: { to: string, subject: string, text: string, html: string }) {
-  if (!process.env.SMTP_HOST) {
-    console.warn("SMTP_HOST not configured. Email not sent to " + to + ". Check console for links.");
+  if (!resend) {
+    console.warn("RESEND_API_KEY not configured. Email not sent to " + to + ". Check console for links.");
     console.log(`[SIMULATED EMAIL] To: ${to}\nSubject: ${subject}\nText: ${text}`);
     return;
   }
   try {
-    await transporter.sendMail({
-      from: process.env.SMTP_FROM || 'shuvansathieshvt@gmail.com',
-      to,
+    const { data, error } = await resend.emails.send({
+      from: process.env.MAIL_FROM || 'onboarding@resend.dev',
+      to: [to],
       subject,
       text,
       html
     });
-    console.log(`[EMAIL SENT] To: ${to}`);
+    
+    if (error) {
+      throw error;
+    }
+    
+    console.log(`[EMAIL SENT] ID: ${data?.id} To: ${to}`);
   } catch (error) {
     console.error(`[EMAIL ERROR] Failed to send to ${to}:`, error);
   }
