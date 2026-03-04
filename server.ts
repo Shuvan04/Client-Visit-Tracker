@@ -35,7 +35,7 @@ async function sendMail({ to, subject, text, html }: { to: string, subject: stri
   }
   try {
     const { data, error } = await resend.emails.send({
-      from: process.env.MAIL_FROM || 'onboarding@resend.dev',
+      from: process.env.MAIL_FROM || 'noreply@client-tracker.iamneo.com',
       to: [to],
       subject,
       text,
@@ -127,7 +127,7 @@ async function startServer() {
       reset_token_expiry: expiry
     });
     
-    const appUrl = process.env.APP_URL || `http://localhost:3000`;
+    const appUrl = process.env.APP_URL || `https://client-tracker.iamneo.com`;
     const resetLink = `${appUrl}/reset-password?token=${token}`;
 
     sendMail({
@@ -196,7 +196,7 @@ async function startServer() {
         created_at: FieldValue.serverTimestamp()
       });
       
-      const appUrl = process.env.APP_URL || `http://localhost:3000`;
+      const appUrl = process.env.APP_URL || `https://client-tracker.iamneo.com`;
       const inviteLink = `${appUrl}/activate?token=${token}`;
 
       sendMail({
