@@ -1,0 +1,5 @@
+{
+  "name": "Client Visit Tracker",
+  "description": "A comprehensive management system for tracking client visits, installations, and exam support activities with role-based access control.",
+  "requestFramePermissions": []
+}
