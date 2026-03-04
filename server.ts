@@ -4,20 +4,25 @@ import path from "path";
 import fs from "fs";
 import crypto from "crypto";
 import { Resend } from "resend";
-import * as admin from "firebase-admin";
+import { initializeApp, cert, getApps, App } from "firebase-admin/app";
+import { getFirestore, FieldValue, Firestore } from "firebase-admin/firestore";
 
 // Firebase Admin Setup
-if (!admin.apps.length) {
-  admin.initializeApp({
-    credential: admin.credential.cert({
+let app: App;
+const existingApps = getApps();
+if (!existingApps.length) {
+  app = initializeApp({
+    credential: cert({
       projectId: "client-visit-tracker-5778e",
       clientEmail: "firebase-adminsdk-fbsvc@client-visit-tracker-5778e.iam.gserviceaccount.com",
       privateKey: "-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQDG7wphs1s3kSLp\nl6nb79qUfBYjyfDqfNRUueeHN/vButjjGq6vJKnB0Oii1Bd9Jdas8ZPF4zw7LWqD\nYjYrAEzvNMtgLcJauwZdOp14+PXWwLOJt6yCeZPX15GQsRjSzFqGW+74V3KUmJ4w\nzcvI4WCncjvFXr5mRR4M55n6rU2a2SMbzIRMzVhA/5SSpGFTO+RsQl3vkyA7y7RE\ne+bVdK5YKxSYbmVTgvQB4pL66W8GP1oh8sC8qtBziZd87pAugDcZAizL177bK7qO\n7iCSVQ4jZgGDQyTLfy3PkovFhpzULgry6DJJxc+PJUexkXnVSncNfEwHQxoOKaeb\naGtvYsSfAgMBAAECggEAHQz6bKMXDonM2eTygrJHrshiKU7LtkqNbWQKmhYEV1m0\nY5HZca0+dxXNaz3iwj1c2Luck1joSlILDG2ysFvmYEZK7twv1jUarFGrfmeI6xgP\n/+wJLrKXcv1BfipGkD4UeCuDvdNzYZzZ+RGMkWTMSxek/+Eil+e/CC5oL5HQU+zg\nyNCd3DhpsdPo7W4/Pn7Oh+EMzb/JLfge1Rs8f9GpxC9hZOgDoyFNT/qycQifK+3Y\nbxQ1eUFvT8sxSxzL/9x5a6ffBaF6cnQ/k9tVEtQym4APHAADT7Pbkc0skbGhV6AK\nuRvq2gwFrcV3XtrZf0Bb6M8baJoiSTD6w2QZwU50dQKBgQDiW6EZoZprkzW0ALb6\n7r2UztQiYr5bl6WHN3yoaqPeeUFPtbdGYW+UNbp2tQnSxNJFmfONkz8WSzV5RM59\nMvfNkYuIkX0UkXeLcm9hW0Ms0/lYF8VMlro+XhULPmr5VcuKzd+NJuHAlIQkS1hK\nvlD0VsFQ9/mAa+KhNjqWIvS1xQKBgQDg/Ayw4CCrsw4pBgocNiLh92Xy7q0TIQE6\nTHvPeZA2EaAFNX378Nw4Nwt9xDF7r/34FfncrwU8swIJbV3SJwb3iQ+BqxnByeER\nWbLsJh3/wi+eMnkddAMvn3p4MvNhcaRcPl/jNT5zRBrNO42UoC/R4sx3+KgloPWr\nZii09i+bEwKBgQCNDpyt5E7eirYEng1pAi2R9fGsG+yUF0RHpwQ/z3SexuE0UwEL\nEtz9dx3jq52bgpumU/G6X/AIbIW+NGqZCpHxwKk7Sa6wipX8iCtwd/a8kLvpcaa5\nu5QEGYzznMn85sIYlYKh64DzCZnvJCS5LzAzk3yUgHMy3Ag2fhy0QsRMIQKBgEJA\nlvAjIBvPv5S/DY0fOAh41RHDzT2702O6kB8Zuijh6dB+3xmo5QC83OptMvEsc0py\nFkExXQZx5GCoTx+KlJeiSemyXARgEaINWw4Fb4IYSfN5A4dz2VhVyzfIMTl5wJ/V\nUmFTFY/V91qGdfvVbB+PfQy7MbDbBF0z2Tro4D33AoGBALQMPmFozs8rYfB+783d\n9JBZbgrhRctCxmkGdRENdVmZzLxfd5Rv7JpMgG9bbLXYjvcApXE+Z7E2RbP9Gy8M\neBZPU/YYgKMxqc0+Vist4pGgMtKOtp9QSTgfBmW33LU0jxw26aTcqkoiaRlftjjM\nmr5LXSxzmkI0dKNYlKdEN1VM\n-----END PRIVATE KEY-----\n",
     }),
   });
+} else {
+  app = existingApps[0];
 }
 
-const db = admin.firestore();
+const db = getFirestore(app);
 
 // Resend Setup
 const resend = new Resend('re_NfDLyKq5_FwsNgo2kRqMK7dPXB2hTggVj');
@@ -67,7 +72,7 @@ async function seedAdmin() {
         role: "admin",
         name: "System Administrator",
         status: "active",
-        created_at: admin.firestore.FieldValue.serverTimestamp()
+        created_at: FieldValue.serverTimestamp()
       });
     }
   }
@@ -158,8 +163,8 @@ async function startServer() {
 
     await userDoc.ref.update({
       password: password,
-      reset_token: admin.firestore.FieldValue.delete(),
-      reset_token_expiry: admin.firestore.FieldValue.delete()
+      reset_token: FieldValue.delete(),
+      reset_token_expiry: FieldValue.delete()
     });
     res.json({ success: true });
   });
@@ -188,7 +193,7 @@ async function startServer() {
         role,
         status: 'pending',
         invitation_token: token,
-        created_at: admin.firestore.FieldValue.serverTimestamp()
+        created_at: FieldValue.serverTimestamp()
       });
       
       const appUrl = process.env.APP_URL || `http://localhost:3000`;
@@ -227,7 +232,7 @@ async function startServer() {
       name,
       password,
       status: 'active',
-      invitation_token: admin.firestore.FieldValue.delete()
+      invitation_token: FieldValue.delete()
     });
     res.json({ success: true });
   });
@@ -255,7 +260,7 @@ async function startServer() {
     if (!db) return res.status(500).json({ error: "Database not connected" });
     const { userId, role, employeeId } = req.query;
     
-    let query: admin.firestore.Query = db.collection('visit_logs');
+    let query: any = db.collection('visit_logs');
 
     if (role === 'admin') {
       if (employeeId && employeeId !== 'All') {
@@ -286,7 +291,7 @@ async function startServer() {
     const logData = req.body;
     const docRef = await db.collection('visit_logs').add({
       ...logData,
-      created_at: admin.firestore.FieldValue.serverTimestamp()
+      created_at: FieldValue.serverTimestamp()
     });
     res.json({ id: docRef.id });
   });
@@ -310,7 +315,7 @@ async function startServer() {
     if (!db) return res.status(500).json({ error: "Database not connected" });
     const { userId, role } = req.query;
     
-    let query: admin.firestore.Query = db.collection('visit_logs');
+    let query: any = db.collection('visit_logs');
     if (role !== 'admin') {
       query = query.where('user_id', '==', userId);
     }
