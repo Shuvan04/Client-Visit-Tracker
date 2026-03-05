@@ -4,6 +4,12 @@ import path from "path";
 import fs from "fs";
 import crypto from "crypto";
 import nodemailer from "nodemailer";
+import dns from "dns";
+
+// Force IPv4 for better compatibility with cloud environments like Render
+if (typeof dns.setDefaultResultOrder === 'function') {
+  dns.setDefaultResultOrder('ipv4first');
+}
 import { initializeApp, cert, getApps } from "firebase-admin/app";
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
 
@@ -27,12 +33,16 @@ const db = getFirestore(app);
 // SMTP Setup (Gmail)
 const transporter = nodemailer.createTransport({
   host: "smtp.gmail.com",
-  port: 465,
-  secure: true,
+  port: 587,
+  secure: false, // Use STARTTLS
   auth: {
     user: "clientvisittracker@gmail.com",
     pass: "hxam qrvp yugo wfwj",
   },
+  tls: {
+    // Do not fail on invalid certs (common in some proxy environments)
+    rejectUnauthorized: false
+  }
 });
 
 // Verify connection on startup
