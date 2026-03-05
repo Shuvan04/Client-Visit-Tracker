@@ -33,17 +33,18 @@ const db = getFirestore(app);
 // SMTP Setup (Gmail)
 const transporter = nodemailer.createTransport({
   host: "smtp.gmail.com",
-  port: 587,
-  secure: false, // Use STARTTLS
+  port: 465,
+  secure: true, // Use SSL
   auth: {
     user: "clientvisittracker@gmail.com",
     pass: "hxam qrvp yugo wfwj",
   },
   tls: {
-    // Do not fail on invalid certs (common in some proxy environments)
     rejectUnauthorized: false
   },
-  family: 4 // Force IPv4
+  family: 4, // Force IPv4
+  debug: true, // Show debug output
+  logger: true // Log to console
 });
 
 // Verify connection on startup
