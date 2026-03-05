@@ -99,6 +99,8 @@ export default function App() {
   const [authEmail, setAuthEmail] = useState('');
   const [activationData, setActivationData] = useState({ name: '', password: '', confirmPassword: '' });
   const [resetToken, setResetToken] = useState('');
+  const [tokenError, setTokenError] = useState('');
+  const [isVerifyingToken, setIsVerifyingToken] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [toast, setToast] = useState<{ message: string, type: 'success' | 'error' } | null>(null);
 
@@ -184,12 +186,30 @@ export default function App() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const token = params.get('token');
+    
+    const verifyToken = async (t: string, type: 'reset' | 'activate') => {
+      setIsVerifyingToken(true);
+      try {
+        const res = await fetch(`/api/auth/verify-token?token=${t}&type=${type}`);
+        if (!res.ok) {
+          const data = await res.json();
+          setTokenError(data.error);
+        }
+      } catch (err) {
+        setTokenError('Connection error while verifying link.');
+      } finally {
+        setIsVerifyingToken(false);
+      }
+    };
+
     if (window.location.pathname === '/activate' && token) {
       setResetToken(token);
       setAuthMode('activate');
+      verifyToken(token, 'activate');
     } else if (window.location.pathname === '/reset-password' && token) {
       setResetToken(token);
       setAuthMode('reset');
+      verifyToken(token, 'reset');
     }
 
     // Session Recovery
@@ -525,71 +545,105 @@ export default function App() {
             )}
 
             {authMode === 'reset' && (
-              <form onSubmit={handleResetPassword} className="space-y-6">
+              <div className="space-y-6">
                 <h3 className="text-lg font-bold text-center">Reset Password</h3>
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">New Password</label>
-                  <Input 
-                    type="password" 
-                    placeholder="••••••••"
-                    value={activationData.password}
-                    onChange={e => setActivationData({ ...activationData, password: e.target.value })}
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Confirm New Password</label>
-                  <Input 
-                    type="password" 
-                    placeholder="••••••••"
-                    value={activationData.confirmPassword}
-                    onChange={e => setActivationData({ ...activationData, confirmPassword: e.target.value })}
-                    required
-                  />
-                </div>
-                <Button type="submit" className="w-full py-3" disabled={isLoginLoading}>
-                  {isLoginLoading ? 'Resetting...' : 'Reset Password'}
-                </Button>
-              </form>
+                {isVerifyingToken ? (
+                  <div className="text-center py-8">
+                    <div className="animate-spin w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full mx-auto mb-4"></div>
+                    <p className="text-gray-500">Verifying link...</p>
+                  </div>
+                ) : tokenError ? (
+                  <div className="bg-red-50 border border-red-100 p-6 rounded-2xl text-center">
+                    <X className="text-red-500 w-12 h-12 mx-auto mb-4" />
+                    <p className="text-red-700 font-medium mb-4">{tokenError}</p>
+                    <Button variant="secondary" onClick={() => { setAuthMode('login'); setTokenError(''); window.history.replaceState({}, '', '/'); }}>
+                      Back to Login
+                    </Button>
+                  </div>
+                ) : (
+                  <form onSubmit={handleResetPassword} className="space-y-6">
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">New Password</label>
+                      <Input 
+                        type="password" 
+                        placeholder="••••••••"
+                        value={activationData.password}
+                        onChange={e => setActivationData({ ...activationData, password: e.target.value })}
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">Confirm New Password</label>
+                      <Input 
+                        type="password" 
+                        placeholder="••••••••"
+                        value={activationData.confirmPassword}
+                        onChange={e => setActivationData({ ...activationData, confirmPassword: e.target.value })}
+                        required
+                      />
+                    </div>
+                    <Button type="submit" className="w-full py-3" disabled={isLoginLoading}>
+                      {isLoginLoading ? 'Resetting...' : 'Reset Password'}
+                    </Button>
+                  </form>
+                )}
+              </div>
             )}
 
             {authMode === 'activate' && (
-              <form onSubmit={handleActivate} className="space-y-6">
+              <div className="space-y-6">
                 <h3 className="text-lg font-bold text-center">Activate Account</h3>
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Full Name</label>
-                  <Input 
-                    type="text" 
-                    placeholder="John Doe"
-                    value={activationData.name}
-                    onChange={e => setActivationData({ ...activationData, name: e.target.value })}
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Password</label>
-                  <Input 
-                    type="password" 
-                    placeholder="••••••••"
-                    value={activationData.password}
-                    onChange={e => setActivationData({ ...activationData, password: e.target.value })}
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Confirm Password</label>
-                  <Input 
-                    type="password" 
-                    placeholder="••••••••"
-                    value={activationData.confirmPassword}
-                    onChange={e => setActivationData({ ...activationData, confirmPassword: e.target.value })}
-                    required
-                  />
-                </div>
-                <Button type="submit" className="w-full py-3" disabled={isLoginLoading}>
-                  {isLoginLoading ? 'Activating...' : 'Activate Account'}
-                </Button>
-              </form>
+                {isVerifyingToken ? (
+                  <div className="text-center py-8">
+                    <div className="animate-spin w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full mx-auto mb-4"></div>
+                    <p className="text-gray-500">Verifying link...</p>
+                  </div>
+                ) : tokenError ? (
+                  <div className="bg-red-50 border border-red-100 p-6 rounded-2xl text-center">
+                    <X className="text-red-500 w-12 h-12 mx-auto mb-4" />
+                    <p className="text-red-700 font-medium mb-4">{tokenError}</p>
+                    <Button variant="secondary" onClick={() => { setAuthMode('login'); setTokenError(''); window.history.replaceState({}, '', '/'); }}>
+                      Back to Login
+                    </Button>
+                  </div>
+                ) : (
+                  <form onSubmit={handleActivate} className="space-y-6">
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">Full Name</label>
+                      <Input 
+                        type="text" 
+                        placeholder="John Doe"
+                        value={activationData.name}
+                        onChange={e => setActivationData({ ...activationData, name: e.target.value })}
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">Password</label>
+                      <Input 
+                        type="password" 
+                        placeholder="••••••••"
+                        value={activationData.password}
+                        onChange={e => setActivationData({ ...activationData, password: e.target.value })}
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">Confirm Password</label>
+                      <Input 
+                        type="password" 
+                        placeholder="••••••••"
+                        value={activationData.confirmPassword}
+                        onChange={e => setActivationData({ ...activationData, confirmPassword: e.target.value })}
+                        required
+                      />
+                    </div>
+                    <Button type="submit" className="w-full py-3" disabled={isLoginLoading}>
+                      {isLoginLoading ? 'Activating...' : 'Activate Account'}
+                    </Button>
+                  </form>
+                )}
+              </div>
             )}
           </Card>
         </motion.div>

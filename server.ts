@@ -216,6 +216,7 @@ async function startServer() {
     if (!db) return res.status(500).json({ error: "Database not connected" });
     const { username, role } = req.body;
     const token = crypto.randomBytes(20).toString('hex');
+    const expiry = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(); // 24 hours
     
     const existingSnapshot = await db.collection('users').where('username', '==', username).get();
     if (!existingSnapshot.empty) {
@@ -228,6 +229,7 @@ async function startServer() {
         role,
         status: 'pending',
         invitation_token: token,
+        invitation_token_expiry: expiry,
         created_at: FieldValue.serverTimestamp()
       });
       
@@ -259,18 +261,48 @@ async function startServer() {
   app.post("/api/users/activate", async (req, res) => {
     if (!db) return res.status(500).json({ error: "Database not connected" });
     const { token, name, password } = req.body;
-    const snapshot = await db.collection('users').where('invitation_token', '==', token).get();
+    const now = new Date().toISOString();
+    const snapshot = await db.collection('users')
+      .where('invitation_token', '==', token)
+      .where('invitation_token_expiry', '>', now)
+      .get();
     
-    if (snapshot.empty) return res.status(400).json({ error: "Invalid invitation token" });
+    if (snapshot.empty) return res.status(400).json({ error: "Invalid or expired invitation token" });
     const userDoc = snapshot.docs[0];
 
     await userDoc.ref.update({
       name,
       password,
       status: 'active',
-      invitation_token: FieldValue.delete()
+      invitation_token: FieldValue.delete(),
+      invitation_token_expiry: FieldValue.delete()
     });
     res.json({ success: true });
+  });
+
+  app.get("/api/auth/verify-token", async (req, res) => {
+    if (!db) return res.status(500).json({ error: "Database not connected" });
+    const { token, type } = req.query;
+    const now = new Date().toISOString();
+
+    let snapshot;
+    if (type === 'reset') {
+      snapshot = await db.collection('users')
+        .where('reset_token', '==', token)
+        .where('reset_token_expiry', '>', now)
+        .get();
+    } else {
+      snapshot = await db.collection('users')
+        .where('invitation_token', '==', token)
+        .where('invitation_token_expiry', '>', now)
+        .get();
+    }
+
+    if (snapshot.empty) {
+      return res.status(400).json({ valid: false, error: "This link is invalid or has expired. Please request a new link or contact your administrator." });
+    }
+
+    res.json({ valid: true });
   });
 
   app.put("/api/users/:id", async (req, res) => {
