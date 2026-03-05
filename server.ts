@@ -42,10 +42,19 @@ const transporter = nodemailer.createTransport({
   tls: {
     // Do not fail on invalid certs (common in some proxy environments)
     rejectUnauthorized: false
-  }
+  },
+  family: 4 // Force IPv4
 });
 
 // Verify connection on startup
+dns.lookup('smtp.gmail.com', { family: 4 }, (err, address) => {
+  if (err) {
+    console.error("[DNS ERROR] Failed to resolve smtp.gmail.com:", err);
+  } else {
+    console.log("[DNS SUCCESS] smtp.gmail.com resolved to:", address);
+  }
+});
+
 transporter.verify((error, success) => {
   if (error) {
     console.error("[SMTP ERROR] Connection failed:", error);
