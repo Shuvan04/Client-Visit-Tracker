@@ -67,6 +67,23 @@ const Button = ({ children, variant = 'primary', ...props }: any) => {
   );
 };
 
+const Toast = ({ message, type = 'success', onClose }: { message: string, type?: 'success' | 'error', onClose: () => void }) => (
+  <motion.div
+    initial={{ opacity: 0, y: -20, x: 20 }}
+    animate={{ opacity: 1, y: 0, x: 0 }}
+    exit={{ opacity: 0, y: -20, x: 20 }}
+    className={`fixed top-6 right-6 z-[100] flex items-center gap-3 px-4 py-3 rounded-xl shadow-lg border ${
+      type === 'success' ? 'bg-emerald-50 border-emerald-100 text-emerald-700' : 'bg-red-50 border-red-100 text-red-700'
+    }`}
+  >
+    {type === 'success' ? <CheckCircle2 size={18} /> : <X size={18} />}
+    <p className="text-sm font-medium">{message}</p>
+    <button onClick={onClose} className="ml-2 hover:opacity-70">
+      <X size={14} />
+    </button>
+  </motion.div>
+);
+
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [view, setView] = useState<'dashboard' | 'logs' | 'activities' | 'users'>('dashboard');
@@ -83,6 +100,12 @@ export default function App() {
   const [activationData, setActivationData] = useState({ name: '', password: '', confirmPassword: '' });
   const [resetToken, setResetToken] = useState('');
   const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [toast, setToast] = useState<{ message: string, type: 'success' | 'error' } | null>(null);
+
+  const showToast = (message: string, type: 'success' | 'error' = 'success') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 4000);
+  };
 
   // Login Form State
   const [loginData, setLoginData] = useState({ username: '', password: '' });
@@ -227,11 +250,11 @@ export default function App() {
         body: JSON.stringify({ username: authEmail })
       });
       if (res.ok) {
-        alert('Reset link sent to your email (check console in this demo)');
+        showToast('Reset link sent to your email');
         setAuthMode('login');
       } else {
         const err = await res.json();
-        alert(err.error);
+        showToast(err.error, 'error');
       }
     } finally {
       setIsLoginLoading(false);
@@ -341,10 +364,10 @@ export default function App() {
     if (res.ok) {
       setNewUserData({ username: '', role: 'user' });
       fetchData();
-      alert('Invitation sent (check console in this demo)');
+      showToast('Invitation sent successfully');
     } else {
       const err = await res.json();
-      alert(err.error || 'Error inviting user');
+      showToast(err.error || 'Error inviting user', 'error');
     }
   };
 
@@ -1301,6 +1324,15 @@ export default function App() {
               </div>
             </motion.div>
           </div>
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {toast && (
+          <Toast 
+            message={toast.message} 
+            type={toast.type} 
+            onClose={() => setToast(null)} 
+          />
         )}
       </AnimatePresence>
       <datalist id="client-list">

@@ -3,7 +3,7 @@ import { createServer as createViteServer } from "vite";
 import path from "path";
 import fs from "fs";
 import crypto from "crypto";
-import { MailerSend, EmailParams, Sender, Recipient } from "mailersend";
+import nodemailer from "nodemailer";
 import { initializeApp, cert, getApps } from "firebase-admin/app";
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
 
@@ -24,25 +24,26 @@ if (!existingApps.length) {
 
 const db = getFirestore(app);
 
-// MailerSend Setup
-const mailersend = new MailerSend({
-  apiKey: 'mlsn.4ffea856c0a78b27b10757be13ec4fb6498e7890d95218b247657abeb7491a60',
+// SMTP Setup (Gmail)
+const transporter = nodemailer.createTransport({
+  service: "gmail",
+  auth: {
+    user: "clientvisittracker@gmail.com",
+    pass: "hxam qrvp yugo wfwj",
+  },
 });
 
 async function sendMail({ to, subject, text, html }: { to: string, subject: string, text: string, html: string }) {
-  const sentFrom = new Sender("noreply@test-z0vklo6v8d7l7qrx.mlsender.net", "Client Tracker");
-  const recipients = [new Recipient(to)];
-
-  const emailParams = new EmailParams()
-    .setFrom(sentFrom)
-    .setTo(recipients)
-    .setSubject(subject)
-    .setHtml(html)
-    .setText(text);
-
   try {
-    await mailersend.email.send(emailParams);
-    console.log(`[EMAIL SENT] To: ${to}`);
+    const info = await transporter.sendMail({
+      from: process.env.MAIL_FROM || 'clientvisittracker@gmail.com',
+      to,
+      subject,
+      text,
+      html
+    });
+    
+    console.log(`[EMAIL SENT] Message ID: ${info.messageId} To: ${to}`);
   } catch (error) {
     console.error(`[EMAIL ERROR] Failed to send to ${to}:`, error);
   }
