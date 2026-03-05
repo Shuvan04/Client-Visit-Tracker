@@ -26,17 +26,29 @@ const db = getFirestore(app);
 
 // SMTP Setup (Gmail)
 const transporter = nodemailer.createTransport({
-  service: "gmail",
+  host: "smtp.gmail.com",
+  port: 465,
+  secure: true,
   auth: {
     user: "clientvisittracker@gmail.com",
     pass: "hxam qrvp yugo wfwj",
   },
 });
 
+// Verify connection on startup
+transporter.verify((error, success) => {
+  if (error) {
+    console.error("[SMTP ERROR] Connection failed:", error);
+  } else {
+    console.log("[SMTP SUCCESS] Server is ready to take our messages");
+  }
+});
+
 async function sendMail({ to, subject, text, html }: { to: string, subject: string, text: string, html: string }) {
   try {
+    console.log(`[EMAIL ATTEMPT] Sending to: ${to}`);
     const info = await transporter.sendMail({
-      from: process.env.MAIL_FROM || 'clientvisittracker@gmail.com',
+      from: `"Client Visit Tracker" <clientvisittracker@gmail.com>`,
       to,
       subject,
       text,
@@ -44,8 +56,10 @@ async function sendMail({ to, subject, text, html }: { to: string, subject: stri
     });
     
     console.log(`[EMAIL SENT] Message ID: ${info.messageId} To: ${to}`);
+    return info;
   } catch (error) {
     console.error(`[EMAIL ERROR] Failed to send to ${to}:`, error);
+    throw error;
   }
 }
 
@@ -127,22 +141,26 @@ async function startServer() {
     const appUrl = process.env.APP_URL || `https://client-tracker.iamneo.com`;
     const resetLink = `${appUrl}/reset-password?token=${token}`;
 
-    sendMail({
-      to: username,
-      subject: "Password Reset Request",
-      text: `You requested a password reset. Click here to reset: ${resetLink}. This link is valid for 5 minutes.`,
-      html: `
-        <div style="font-family: sans-serif; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
-          <h2 style="color: #4f46e5;">Password Reset</h2>
-          <p>You requested a password reset for your Client Visit Tracker account.</p>
-          <p>Click the button below to set a new password. This link is valid for <strong>5 minutes</strong>.</p>
-          <a href="${resetLink}" style="display: inline-block; padding: 12px 24px; background-color: #4f46e5; color: white; text-decoration: none; border-radius: 8px; font-weight: bold; margin: 20px 0;">Reset Password</a>
-          <p style="color: #666; font-size: 12px;">If you didn't request this, you can safely ignore this email.</p>
-        </div>
-      `
-    });
-
-    res.json({ success: true, message: "Reset link sent to your email (valid for 5 mins)" });
+    try {
+      await sendMail({
+        to: username,
+        subject: "Password Reset Request",
+        text: `You requested a password reset. Click here to reset: ${resetLink}. This link is valid for 5 minutes.`,
+        html: `
+          <div style="font-family: sans-serif; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
+            <h2 style="color: #4f46e5;">Password Reset</h2>
+            <p>You requested a password reset for your Client Visit Tracker account.</p>
+            <p>Click the button below to set a new password. This link is valid for <strong>5 minutes</strong>.</p>
+            <a href="${resetLink}" style="display: inline-block; padding: 12px 24px; background-color: #4f46e5; color: white; text-decoration: none; border-radius: 8px; font-weight: bold; margin: 20px 0;">Reset Password</a>
+            <p style="color: #666; font-size: 12px;">If you didn't request this, you can safely ignore this email.</p>
+          </div>
+        `
+      });
+      res.json({ success: true, message: "Reset link sent to your email (valid for 5 mins)" });
+    } catch (mailError) {
+      console.error("Failed to send reset email:", mailError);
+      res.status(500).json({ error: "Failed to send reset email. Please try again later." });
+    }
   });
 
   app.post("/api/auth/reset-password", async (req, res) => {
@@ -196,7 +214,7 @@ async function startServer() {
       const appUrl = process.env.APP_URL || `https://client-tracker.iamneo.com`;
       const inviteLink = `${appUrl}/activate?token=${token}`;
 
-      sendMail({
+      await sendMail({
         to: username,
         subject: "Invitation to Client Visit Tracker",
         text: `You have been invited to Client Visit Tracker. Click here to activate your account: ${inviteLink}`,
@@ -212,8 +230,9 @@ async function startServer() {
       });
 
       res.json({ success: true });
-    } catch (e) {
-      res.status(400).json({ error: "Error creating user" });
+    } catch (err) {
+      console.error("Error in invite process:", err);
+      res.status(500).json({ error: "Error sending invitation email" });
     }
   });
 
