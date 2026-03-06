@@ -26,8 +26,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { User, VisitLog, DashboardStats, Role } from './types';
-import { CLIENTS } from './constants';
+import { User, VisitLog, DashboardStats, Role, Client, ClientLocation } from './types';
 
 // --- Components ---
 
@@ -84,12 +83,92 @@ const Toast = ({ message, type = 'success', onClose }: { message: string, type?:
   </motion.div>
 );
 
+const MultiSelect = ({ options, selected, onChange, placeholder }: { options: string[], selected: string[], onChange: (val: string[]) => void, placeholder: string }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  return (
+    <div className="relative">
+      <div 
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-full px-4 py-2 rounded-xl border border-black/10 bg-white cursor-pointer flex justify-between items-center min-h-[42px]"
+      >
+        <span className="text-sm truncate">
+          {selected.length === 0 ? placeholder : `${selected.length} selected`}
+        </span>
+        <ChevronRight size={16} className={`transition-transform ${isOpen ? 'rotate-90' : ''}`} />
+      </div>
+      <AnimatePresence>
+        {isOpen && (
+          <div key="multiselect-dropdown">
+            <div className="fixed inset-0 z-[60]" onClick={() => setIsOpen(false)} />
+            <motion.div 
+              initial={{ opacity: 0, y: 5 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 5 }}
+              className="absolute top-full left-0 right-0 mt-2 bg-white border border-black/10 rounded-xl shadow-xl z-[70] max-h-60 overflow-y-auto p-2"
+            >
+              {options.map((opt, i) => (
+                <label key={`${opt}-${i}`} className="flex items-center gap-3 px-3 py-2 hover:bg-gray-50 rounded-lg cursor-pointer">
+                  <input 
+                    type="checkbox"
+                    checked={selected.includes(opt)}
+                    onChange={() => {
+                      if (selected.includes(opt)) {
+                        onChange(selected.filter(s => s !== opt));
+                      } else {
+                        onChange([...selected, opt]);
+                      }
+                    }}
+                    className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                  />
+                  <span className="text-sm text-gray-700">{opt}</span>
+                </label>
+              ))}
+              {options.length === 0 && <p className="text-xs text-gray-400 text-center py-4">No options available</p>}
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+};
+
+const GlassModal = ({ children, onClose, title }: { children: React.ReactNode, onClose: () => void, title: string }) => (
+  <div className="fixed inset-0 z-[100] flex items-center justify-center p-6">
+    <motion.div 
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      onClick={onClose}
+      className="absolute inset-0 bg-black/20 backdrop-blur-md"
+    />
+    <motion.div 
+      initial={{ opacity: 0, scale: 0.95, y: 20 }}
+      animate={{ opacity: 1, scale: 1, y: 0 }}
+      exit={{ opacity: 0, scale: 0.95, y: 20 }}
+      className="relative w-full max-w-md bg-white/80 backdrop-blur-2xl border border-white/20 rounded-3xl shadow-2xl p-8 text-center"
+    >
+      <h3 className="text-xl font-bold text-gray-900 mb-4">{title}</h3>
+      {children}
+    </motion.div>
+  </div>
+);
+
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
-  const [view, setView] = useState<'dashboard' | 'logs' | 'activities' | 'users'>('dashboard');
+  const [view, setView] = useState<'dashboard' | 'logs' | 'activities' | 'users' | 'clients' | 'locations'>('dashboard');
   const [logs, setLogs] = useState<VisitLog[]>([]);
-  const [stats, setStats] = useState<DashboardStats>({ total_visits: 0, total_clients: 0, total_days: 0, total_installations: 0, success_rate: 0 });
+  const [stats, setStats] = useState<DashboardStats>({ 
+    total_visits: 0, 
+    total_clients: 0, 
+    total_days: 0, 
+    total_installations: 0, 
+    total_enrolled: 0,
+    total_attended: 0,
+    success_rate: 0 
+  });
   const [allUsers, setAllUsers] = useState<User[]>([]);
+  const [clients, setClients] = useState<Client[]>([]);
+  const [locations, setLocations] = useState<ClientLocation[]>([]);
   const [isLoginLoading, setIsLoginLoading] = useState(false);
   const [loginError, setLoginError] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -102,6 +181,10 @@ export default function App() {
   const [tokenError, setTokenError] = useState('');
   const [isVerifyingToken, setIsVerifyingToken] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [deletingUser, setDeletingUser] = useState<User | null>(null);
+  const [deletingClient, setDeletingClient] = useState<Client | null>(null);
+  const [deletingLocation, setDeletingLocation] = useState<ClientLocation | null>(null);
+  const [deletingLog, setDeletingLog] = useState<VisitLog | null>(null);
   const [toast, setToast] = useState<{ message: string, type: 'success' | 'error' } | null>(null);
 
   const showToast = (message: string, type: 'success' | 'error' = 'success') => {
@@ -114,7 +197,8 @@ export default function App() {
 
   // Activity Form State
   const [activityData, setActivityData] = useState<Partial<VisitLog>>({
-    client_name: '',
+    client_id: '',
+    location_id: '',
     date_from: '',
     date_to: '',
     purpose: 'Installation',
@@ -132,18 +216,29 @@ export default function App() {
 
   // Filter States
   const [filters, setFilters] = useState({
-    clientName: '',
-    date: '',
-    purpose: 'All',
-    employeeId: 'All'
+    clientNames: [] as string[],
+    locations: [] as string[],
+    dateFrom: '',
+    dateTo: '',
+    purposes: [] as string[],
+    employeeIds: [] as string[]
   });
 
   const filteredLogs = logs.filter(log => {
-    const matchesClient = log.client_name.toLowerCase().includes(filters.clientName.toLowerCase());
-    const matchesDate = filters.date ? (log.date_from === filters.date || log.date_to === filters.date) : true;
-    const matchesPurpose = filters.purpose === 'All' ? true : log.purpose === filters.purpose;
-    const matchesEmployee = filters.employeeId === 'All' ? true : log.user_id.toString() === filters.employeeId;
-    return matchesClient && matchesDate && matchesPurpose && matchesEmployee;
+    const matchesClient = filters.clientNames.length === 0 || filters.clientNames.includes(log.client_name || '');
+    const matchesLocation = filters.locations.length === 0 || filters.locations.includes(log.location_name || '');
+    
+    const logFrom = new Date(log.date_from).getTime();
+    const logTo = new Date(log.date_to).getTime();
+    const filterFrom = filters.dateFrom ? new Date(filters.dateFrom).getTime() : -Infinity;
+    const filterTo = filters.dateTo ? new Date(filters.dateTo).getTime() : Infinity;
+    
+    const matchesDate = logFrom >= filterFrom && logTo <= filterTo;
+    
+    const matchesPurpose = filters.purposes.length === 0 || filters.purposes.includes(log.purpose);
+    const matchesEmployee = filters.employeeIds.length === 0 || filters.employeeIds.includes(log.user_id.toString());
+    
+    return matchesClient && matchesLocation && matchesDate && matchesPurpose && matchesEmployee;
   });
 
   useEffect(() => {
@@ -168,9 +263,19 @@ export default function App() {
       setStats(statsData);
 
       // Fetch Logs
-      const logsRes = await fetch(`/api/logs?userId=${user.id}&role=${user.role}&employeeId=${filters.employeeId}`);
+      const logsRes = await fetch(`/api/logs?userId=${user.id}&role=${user.role}`);
       const logsData = await logsRes.json();
       setLogs(logsData);
+
+      // Fetch Clients
+      const clientsRes = await fetch('/api/clients');
+      const clientsData = await clientsRes.json();
+      setClients(clientsData);
+
+      // Fetch Locations
+      const locationsRes = await fetch('/api/locations');
+      const locationsData = await locationsRes.json();
+      setLocations(locationsData);
 
       // Fetch Users if Admin
       if (user.role === 'admin') {
@@ -187,6 +292,8 @@ export default function App() {
     const params = new URLSearchParams(window.location.search);
     const token = params.get('token');
     
+    const mode = params.get('mode');
+    
     const verifyToken = async (t: string, type: 'reset' | 'activate') => {
       setIsVerifyingToken(true);
       try {
@@ -202,11 +309,11 @@ export default function App() {
       }
     };
 
-    if (window.location.pathname === '/activate' && token) {
+    if ((window.location.pathname === '/activate' || mode === 'activate') && token) {
       setResetToken(token);
       setAuthMode('activate');
       verifyToken(token, 'activate');
-    } else if (window.location.pathname === '/reset-password' && token) {
+    } else if ((window.location.pathname === '/reset-password' || mode === 'reset') && token) {
       setResetToken(token);
       setAuthMode('reset');
       verifyToken(token, 'reset');
@@ -337,6 +444,13 @@ export default function App() {
 
   const handleCreateActivity = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    if (activityData.date_from && activityData.date_to) {
+      if (new Date(activityData.date_to) < new Date(activityData.date_from)) {
+        return alert('To Date cannot be before From Date');
+      }
+    }
+
     const method = editingLog ? 'PUT' : 'POST';
     const url = editingLog ? `/api/logs/${editingLog.id}` : '/api/logs';
     
@@ -350,7 +464,8 @@ export default function App() {
       setIsModalOpen(false);
       setEditingLog(null);
       setActivityData({
-        client_name: '',
+        client_id: '',
+        location_id: '',
         date_from: '',
         date_to: '',
         purpose: 'Installation',
@@ -367,10 +482,12 @@ export default function App() {
     }
   };
 
-  const handleDeleteLog = async (id: number) => {
-    if (confirm('Are you sure you want to delete this log?')) {
-      await fetch(`/api/logs/${id}`, { method: 'DELETE' });
+  const handleDeleteLog = async (id: string) => {
+    const res = await fetch(`/api/logs/${id}`, { method: 'DELETE' });
+    if (res.ok) {
+      setDeletingLog(null);
       fetchData();
+      showToast('Log deleted successfully');
     }
   };
 
@@ -391,10 +508,30 @@ export default function App() {
     }
   };
 
-  const handleDeleteUser = async (id: number) => {
-    if (confirm('Are you sure you want to delete this user?')) {
-      await fetch(`/api/users/${id}`, { method: 'DELETE' });
+  const handleDeleteUser = async (id: string) => {
+    const res = await fetch(`/api/users/${id}`, { method: 'DELETE' });
+    if (res.ok) {
+      setDeletingUser(null);
+      showToast('User deleted successfully');
       fetchData();
+    }
+  };
+
+  const handleDeleteClient = async (id: string) => {
+    const res = await fetch(`/api/clients/${id}`, { method: 'DELETE' });
+    if (res.ok) {
+      setDeletingClient(null);
+      fetchData();
+      showToast('Client removed');
+    }
+  };
+
+  const handleDeleteLocation = async (id: string) => {
+    const res = await fetch(`/api/locations/${id}`, { method: 'DELETE' });
+    if (res.ok) {
+      setDeletingLocation(null);
+      fetchData();
+      showToast('Location removed');
     }
   };
 
@@ -418,6 +555,7 @@ export default function App() {
   const exportToExcel = () => {
     const data = filteredLogs.map(log => ({
       'Client Name': log.client_name,
+      'Location': log.location_name,
       'Employee': log.user_name,
       'Date From': log.date_from,
       'Date To': log.date_to,
@@ -444,21 +582,30 @@ export default function App() {
     
     const tableData = filteredLogs.map(log => [
       log.client_name,
+      log.location_name,
       log.user_name,
       log.date_from,
+      log.date_to,
       log.purpose,
       log.systems_installed,
       log.students_enrolled,
       log.students_attended,
-      `Rs. ${log.travel_cost + log.lodging_cost + log.misc_expense}`
+      log.travel_cost,
+      log.lodging_cost,
+      log.misc_expense,
+      (log.travel_cost + log.lodging_cost + log.misc_expense).toFixed(2),
+      log.remarks
     ]);
 
     autoTable(doc, {
-      head: [['Client', 'Employee', 'Date', 'Purpose', 'Systems', 'Enrolled', 'Attended', 'Total Cost']],
+      head: [['Client', 'Location', 'Employee', 'From', 'To', 'Purpose', 'Systems', 'Enrolled', 'Attended', 'Travel', 'Lodging', 'Misc', 'Total', 'Remarks']],
       body: tableData,
       startY: 20,
-      styles: { fontSize: 8 },
-      headStyles: { fillColor: [79, 70, 229] }
+      styles: { fontSize: 6, cellPadding: 1 },
+      headStyles: { fillColor: [79, 70, 229] },
+      columnStyles: {
+        13: { cellWidth: 30 } // Remarks column width
+      }
     });
 
     doc.save(`Visit_Logs_${new Date().toISOString().split('T')[0]}.pdf`);
@@ -690,13 +837,29 @@ export default function App() {
           </button>
 
           {user.role === 'admin' && (
-            <button 
-              onClick={() => setView('users')}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${view === 'users' ? 'bg-indigo-50 text-indigo-600 font-semibold' : 'text-gray-500 hover:bg-gray-50'}`}
-            >
-              <Users size={20} />
-              User Management
-            </button>
+            <>
+              <button 
+                onClick={() => setView('clients')}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${view === 'clients' ? 'bg-indigo-50 text-indigo-600 font-semibold' : 'text-gray-500 hover:bg-gray-50'}`}
+              >
+                <Building2 size={20} />
+                Client Management
+              </button>
+              <button 
+                onClick={() => setView('locations')}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${view === 'locations' ? 'bg-indigo-50 text-indigo-600 font-semibold' : 'text-gray-500 hover:bg-gray-50'}`}
+              >
+                <Calendar size={20} />
+                Location Management
+              </button>
+              <button 
+                onClick={() => setView('users')}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${view === 'users' ? 'bg-indigo-50 text-indigo-600 font-semibold' : 'text-gray-500 hover:bg-gray-50'}`}
+              >
+                <Users size={20} />
+                User Management
+              </button>
+            </>
           )}
         </nav>
 
@@ -796,7 +959,12 @@ export default function App() {
                 </div>
                 <div>
                   <p className="text-sm text-gray-500 font-medium">Success Rate</p>
-                  <p className="text-2xl font-bold text-gray-900">{stats.success_rate}%</p>
+                  <p className="text-2xl font-bold text-gray-900">
+                    {stats.success_rate}%
+                    <span className="text-xs text-gray-400 ml-2 font-normal">
+                      ({stats.total_attended}/{stats.total_enrolled})
+                    </span>
+                  </p>
                 </div>
               </Card>
             </motion.div>
@@ -844,47 +1012,63 @@ export default function App() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-semibold text-gray-700 mb-2">Client Name</label>
-                      <Input 
+                      <Select 
                         required
-                        value={activityData.client_name}
-                        onChange={e => setActivityData({ ...activityData, client_name: e.target.value })}
-                        list="client-list"
-                      />
+                        value={activityData.client_id}
+                        onChange={e => setActivityData({ ...activityData, client_id: e.target.value })}
+                      >
+                        <option value="">Select Client...</option>
+                        {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                      </Select>
                     </div>
                     <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-2">Purpose</label>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">Location</label>
                       <Select 
-                        value={activityData.purpose}
-                        onChange={e => setActivityData({ ...activityData, purpose: e.target.value as any })}
+                        required
+                        value={activityData.location_id}
+                        onChange={e => setActivityData({ ...activityData, location_id: e.target.value })}
                       >
-                        <option value="Installation">Installation</option>
-                        <option value="Exam Support">Exam Support</option>
+                        <option value="">Select Location...</option>
+                        {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
                       </Select>
                     </div>
                   </div>
 
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">Purpose</label>
+                    <Select 
+                      value={activityData.purpose}
+                      onChange={e => setActivityData({ ...activityData, purpose: e.target.value as any })}
+                    >
+                      <option value="Installation">Installation</option>
+                      <option value="Exam Support">Exam Support</option>
+                      <option value="Exam Support & Installation">Exam Support & Installation</option>
+                    </Select>
+                  </div>
+
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-2">From Date</label>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">From Date & Time</label>
                       <Input 
-                        type="date" 
+                        type="datetime-local" 
                         required
                         value={activityData.date_from}
                         onChange={e => setActivityData({ ...activityData, date_from: e.target.value })}
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-2">To Date</label>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">To Date & Time</label>
                       <Input 
-                        type="date" 
+                        type="datetime-local" 
                         required
                         value={activityData.date_to}
+                        min={activityData.date_from}
                         onChange={e => setActivityData({ ...activityData, date_to: e.target.value })}
                       />
                     </div>
                   </div>
 
-                  {activityData.purpose === 'Installation' ? (
+                  {(activityData.purpose === 'Installation' || activityData.purpose === 'Exam Support & Installation') && (
                     <div>
                       <label className="block text-sm font-semibold text-gray-700 mb-2">Number of Systems Installed</label>
                       <Input 
@@ -893,7 +1077,9 @@ export default function App() {
                         onChange={e => setActivityData({ ...activityData, systems_installed: parseInt(e.target.value) || 0 })}
                       />
                     </div>
-                  ) : (
+                  )}
+
+                  {(activityData.purpose === 'Exam Support' || activityData.purpose === 'Exam Support & Installation') && (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
                         <label className="block text-sm font-semibold text-gray-700 mb-2">Students Enrolled</label>
@@ -979,72 +1165,89 @@ export default function App() {
                       {filteredLogs.length} {filteredLogs.length === 1 ? 'Visit' : 'Visits'}
                     </span>
                   </h3>
-                  <div className="flex gap-2">
-                    <button 
-                      onClick={exportToExcel}
-                      className="flex items-center gap-2 px-3 py-1.5 bg-emerald-50 text-emerald-600 rounded-lg text-xs font-bold hover:bg-emerald-100 transition-colors"
-                      title="Download Excel"
-                    >
-                      <FileSpreadsheet size={14} />
-                      Excel
-                    </button>
-                    <button 
-                      onClick={exportToPDF}
-                      className="flex items-center gap-2 px-3 py-1.5 bg-red-50 text-red-600 rounded-lg text-xs font-bold hover:bg-red-100 transition-colors"
-                      title="Download PDF"
-                    >
-                      <FileText size={14} />
-                      PDF
-                    </button>
+                  <div className="flex items-center gap-4">
+                    <div className="flex gap-2">
+                      <button 
+                        onClick={exportToExcel}
+                        className="flex items-center gap-2 px-3 py-1.5 bg-emerald-50 text-emerald-600 rounded-lg text-xs font-bold hover:bg-emerald-100 transition-colors"
+                        title="Download Excel"
+                      >
+                        <FileSpreadsheet size={14} />
+                        Excel
+                      </button>
+                      <button 
+                        onClick={exportToPDF}
+                        className="flex items-center gap-2 px-3 py-1.5 bg-red-50 text-red-600 rounded-lg text-xs font-bold hover:bg-red-100 transition-colors"
+                        title="Download PDF"
+                      >
+                        <FileText size={14} />
+                        PDF
+                      </button>
+                    </div>
                   </div>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">
                   <div>
-                    <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Client Name</label>
-                    <Input 
-                      placeholder="Search client..." 
-                      value={filters.clientName}
-                      onChange={e => setFilters({ ...filters, clientName: e.target.value })}
-                      list="client-list"
+                    <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Client Names</label>
+                    <MultiSelect 
+                      options={Array.from(new Set(logs.map(l => l.client_name)))}
+                      selected={filters.clientNames}
+                      onChange={val => setFilters({ ...filters, clientNames: val })}
+                      placeholder="Select clients..."
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Date</label>
+                    <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Locations</label>
+                    <MultiSelect 
+                      options={Array.from(new Set(logs.map(l => l.location_name || '')))}
+                      selected={filters.locations}
+                      onChange={val => setFilters({ ...filters, locations: val })}
+                      placeholder="Select locations..."
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">From Date</label>
                     <Input 
                       type="date"
-                      value={filters.date}
-                      onChange={e => setFilters({ ...filters, date: e.target.value })}
+                      value={filters.dateFrom}
+                      onChange={e => setFilters({ ...filters, dateFrom: e.target.value })}
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Purpose</label>
-                    <Select 
-                      value={filters.purpose}
-                      onChange={e => setFilters({ ...filters, purpose: e.target.value })}
-                    >
-                      <option value="All">All Purposes</option>
-                      <option value="Installation">Installation</option>
-                      <option value="Exam Support">Exam Support</option>
-                    </Select>
+                    <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">To Date</label>
+                    <Input 
+                      type="date"
+                      value={filters.dateTo}
+                      onChange={e => setFilters({ ...filters, dateTo: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Purposes</label>
+                    <MultiSelect 
+                      options={['Installation', 'Exam Support', 'Exam Support & Installation']}
+                      selected={filters.purposes}
+                      onChange={val => setFilters({ ...filters, purposes: val })}
+                      placeholder="Select purposes..."
+                    />
                   </div>
                   {user.role === 'admin' && (
                     <div>
-                      <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Employee</label>
-                      <Select 
-                        value={filters.employeeId}
-                        onChange={e => setFilters({ ...filters, employeeId: e.target.value })}
-                      >
-                        <option value="All">All Employees</option>
-                        {allUsers.map(u => (
-                          <option key={u.id} value={u.id}>{u.name}</option>
-                        ))}
-                      </Select>
+                      <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Employees</label>
+                      <MultiSelect 
+                        options={allUsers.map(u => u.name)}
+                        selected={allUsers.filter(u => filters.employeeIds.includes(u.id)).map(u => u.name)}
+                        onChange={names => {
+                          const ids = allUsers.filter(u => names.includes(u.name)).map(u => u.id);
+                          setFilters({ ...filters, employeeIds: ids });
+                        }}
+                        placeholder="Select employees..."
+                      />
                     </div>
                   )}
                 </div>
-                { (filters.clientName || filters.date || filters.purpose !== 'All' || filters.employeeId !== 'All') && (
+                { (filters.clientNames.length > 0 || filters.locations.length > 0 || filters.dateFrom || filters.dateTo || filters.purposes.length > 0 || filters.employeeIds.length > 0) && (
                   <button 
-                    onClick={() => setFilters({ clientName: '', date: '', purpose: 'All', employeeId: 'All' })}
+                    onClick={() => setFilters({ clientNames: [], locations: [], dateFrom: '', dateTo: '', purposes: [], employeeIds: [] })}
                     className="mt-4 text-xs text-indigo-600 font-semibold hover:underline"
                   >
                     Clear Filters
@@ -1069,6 +1272,7 @@ export default function App() {
                           </div>
                           <p className="text-sm text-gray-500 flex items-center gap-1 mt-1">
                             <Calendar size={14} /> {log.date_from} to {log.date_to}
+                            <span className="ml-2 text-gray-400">• {log.location_name}</span>
                             {user.role === 'admin' && <span className="ml-2 text-indigo-600 font-medium">• {log.user_name}</span>}
                           </p>
                         </div>
@@ -1101,7 +1305,7 @@ export default function App() {
                             <Edit2 size={18} />
                           </button>
                           <button 
-                            onClick={() => handleDeleteLog(log.id)}
+                            onClick={() => setDeletingLog(log)}
                             className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
                           >
                             <Trash2 size={18} />
@@ -1110,17 +1314,25 @@ export default function App() {
                       </div>
                     </div>
                     
-                    <div className="mt-4 pt-4 border-t border-black/5 grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                    <div className="mt-4 pt-4 border-t border-black/5 grid grid-cols-1 md:grid-cols-4 gap-4 text-sm">
                       <div>
-                        <p className="text-gray-400 font-medium">Details</p>
+                        <p className="text-gray-400 font-medium uppercase text-[10px] tracking-wider">Details</p>
                         <p className="text-gray-700 mt-1">
                           {log.purpose === 'Installation' 
                             ? `${log.systems_installed} systems installed`
-                            : `Success Rate: ${log.students_attended}/${log.students_enrolled} students`}
+                            : `${log.students_attended}/${log.students_enrolled} students`}
                         </p>
                       </div>
+                      {log.students_enrolled && log.students_enrolled > 0 && (
+                        <div>
+                          <p className="text-gray-400 font-medium uppercase text-[10px] tracking-wider">Success Rate</p>
+                          <p className="text-emerald-600 mt-1 font-bold">
+                            {(( (log.students_attended || 0) / log.students_enrolled) * 100).toFixed(1)}%
+                          </p>
+                        </div>
+                      )}
                       <div className="md:col-span-2">
-                        <p className="text-gray-400 font-medium">Remarks</p>
+                        <p className="text-gray-400 font-medium uppercase text-[10px] tracking-wider">Remarks</p>
                         <p className="text-gray-700 mt-1 italic">"{log.remarks || 'No remarks provided'}"</p>
                       </div>
                     </div>
@@ -1136,6 +1348,101 @@ export default function App() {
             </motion.div>
           )}
 
+          {view === 'clients' && user.role === 'admin' && (
+            <motion.div 
+              key="clients"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              className="space-y-8"
+            >
+              <Card className="max-w-xl">
+                <h3 className="text-lg font-bold mb-6">Add New Client</h3>
+                <form 
+                  onSubmit={async (e) => {
+                    e.preventDefault();
+                    const name = (e.target as any).clientName.value;
+                    const res = await fetch('/api/clients', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ name })
+                    });
+                    if (res.ok) {
+                      (e.target as any).reset();
+                      fetchData();
+                      showToast('Client added successfully');
+                    }
+                  }} 
+                  className="flex gap-4"
+                >
+                  <Input name="clientName" placeholder="Enter client name" required className="flex-1" />
+                  <Button type="submit">Add Client</Button>
+                </form>
+              </Card>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {clients.map(c => (
+                  <Card key={c.id} className="flex items-center justify-between p-4">
+                    <span className="font-bold text-gray-900">{c.name}</span>
+                    <button 
+                      onClick={() => setDeletingClient(c)}
+                      className="p-2 text-gray-400 hover:text-red-600 rounded-lg transition-colors"
+                    >
+                      <Trash2 size={18} />
+                    </button>
+                  </Card>
+                ))}
+              </div>
+            </motion.div>
+          )}
+
+          {view === 'locations' && user.role === 'admin' && (
+            <motion.div 
+              key="locations"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              className="space-y-8"
+            >
+              <Card className="max-w-xl">
+                <h3 className="text-lg font-bold mb-6">Add New Location</h3>
+                <form 
+                  onSubmit={async (e) => {
+                    e.preventDefault();
+                    const name = (e.target as any).locationName.value;
+                    const res = await fetch('/api/locations', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ name })
+                    });
+                    if (res.ok) {
+                      (e.target as any).reset();
+                      fetchData();
+                      showToast('Location added successfully');
+                    }
+                  }} 
+                  className="flex gap-4"
+                >
+                  <Input name="locationName" placeholder="Enter location name" required className="flex-1" />
+                  <Button type="submit">Add Location</Button>
+                </form>
+              </Card>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {locations.map(l => (
+                  <Card key={l.id} className="flex items-center justify-between p-4">
+                    <span className="font-bold text-gray-900">{l.name}</span>
+                    <button 
+                      onClick={() => setDeletingLocation(l)}
+                      className="p-2 text-gray-400 hover:text-red-600 rounded-lg transition-colors"
+                    >
+                      <Trash2 size={18} />
+                    </button>
+                  </Card>
+                ))}
+              </div>
+            </motion.div>
+          )}
           {view === 'users' && user.role === 'admin' && (
             <motion.div 
               key="users"
@@ -1205,7 +1512,7 @@ export default function App() {
                             <Edit2 size={16} />
                           </button>
                           <button 
-                            onClick={() => handleDeleteUser(u.id)}
+                            onClick={() => setDeletingUser(u)}
                             className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg transition-colors"
                           >
                             <Trash2 size={16} />
@@ -1259,47 +1566,63 @@ export default function App() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-semibold text-gray-700 mb-2">Client Name</label>
-                      <Input 
+                      <Select 
                         required
-                        value={activityData.client_name}
-                        onChange={e => setActivityData({ ...activityData, client_name: e.target.value })}
-                        list="client-list"
-                      />
+                        value={activityData.client_id}
+                        onChange={e => setActivityData({ ...activityData, client_id: e.target.value })}
+                      >
+                        <option value="">Select Client...</option>
+                        {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                      </Select>
                     </div>
                     <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-2">Purpose</label>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">Location</label>
                       <Select 
-                        value={activityData.purpose}
-                        onChange={e => setActivityData({ ...activityData, purpose: e.target.value as any })}
+                        required
+                        value={activityData.location_id}
+                        onChange={e => setActivityData({ ...activityData, location_id: e.target.value })}
                       >
-                        <option value="Installation">Installation</option>
-                        <option value="Exam Support">Exam Support</option>
+                        <option value="">Select Location...</option>
+                        {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
                       </Select>
                     </div>
                   </div>
 
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">Purpose</label>
+                    <Select 
+                      value={activityData.purpose}
+                      onChange={e => setActivityData({ ...activityData, purpose: e.target.value as any })}
+                    >
+                      <option value="Installation">Installation</option>
+                      <option value="Exam Support">Exam Support</option>
+                      <option value="Exam Support & Installation">Exam Support & Installation</option>
+                    </Select>
+                  </div>
+
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-2">From Date</label>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">From Date & Time</label>
                       <Input 
-                        type="date" 
+                        type="datetime-local" 
                         required
                         value={activityData.date_from}
                         onChange={e => setActivityData({ ...activityData, date_from: e.target.value })}
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-2">To Date</label>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">To Date & Time</label>
                       <Input 
-                        type="date" 
+                        type="datetime-local" 
                         required
                         value={activityData.date_to}
+                        min={activityData.date_from}
                         onChange={e => setActivityData({ ...activityData, date_to: e.target.value })}
                       />
                     </div>
                   </div>
 
-                  {activityData.purpose === 'Installation' ? (
+                  {(activityData.purpose === 'Installation' || activityData.purpose === 'Exam Support & Installation') && (
                     <div>
                       <label className="block text-sm font-semibold text-gray-700 mb-2">Number of Systems Installed</label>
                       <Input 
@@ -1308,7 +1631,9 @@ export default function App() {
                         onChange={e => setActivityData({ ...activityData, systems_installed: parseInt(e.target.value) || 0 })}
                       />
                     </div>
-                  ) : (
+                  )}
+
+                  {(activityData.purpose === 'Exam Support' || activityData.purpose === 'Exam Support & Installation') && (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
                         <label className="block text-sm font-semibold text-gray-700 mb-2">Students Enrolled</label>
@@ -1381,6 +1706,94 @@ export default function App() {
         )}
       </AnimatePresence>
       <AnimatePresence>
+        {deletingUser && (
+          <GlassModal 
+            title="Delete User" 
+            onClose={() => setDeletingUser(null)}
+          >
+            <div className="mb-8">
+              <div className="w-20 h-20 bg-red-50 text-red-600 rounded-3xl flex items-center justify-center mx-auto mb-6">
+                <Trash2 size={40} />
+              </div>
+              <p className="text-gray-600">
+                Are you sure you want to delete <span className="font-bold text-gray-900">{deletingUser.name || deletingUser.username}</span>?
+                This action cannot be undone.
+              </p>
+            </div>
+            <div className="flex gap-4">
+              <Button variant="secondary" className="flex-1" onClick={() => setDeletingUser(null)}>Cancel</Button>
+              <Button className="flex-1 bg-red-600 hover:bg-red-700" onClick={() => handleDeleteUser(deletingUser.id)}>Delete</Button>
+            </div>
+          </GlassModal>
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {deletingClient && (
+          <GlassModal 
+            title="Delete Client" 
+            onClose={() => setDeletingClient(null)}
+          >
+            <div className="mb-8 text-center">
+              <div className="w-20 h-20 bg-red-50 text-red-600 rounded-3xl flex items-center justify-center mx-auto mb-6">
+                <Trash2 size={40} />
+              </div>
+              <p className="text-gray-600">
+                Are you sure you want to delete client <span className="font-bold text-gray-900">{deletingClient.name}</span>?
+                This action cannot be undone.
+              </p>
+            </div>
+            <div className="flex gap-4">
+              <Button variant="secondary" className="flex-1" onClick={() => setDeletingClient(null)}>Cancel</Button>
+              <Button className="flex-1 bg-red-600 hover:bg-red-700" onClick={() => handleDeleteClient(deletingClient.id)}>Delete</Button>
+            </div>
+          </GlassModal>
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {deletingLocation && (
+          <GlassModal 
+            title="Delete Location" 
+            onClose={() => setDeletingLocation(null)}
+          >
+            <div className="mb-8 text-center">
+              <div className="w-20 h-20 bg-red-50 text-red-600 rounded-3xl flex items-center justify-center mx-auto mb-6">
+                <Trash2 size={40} />
+              </div>
+              <p className="text-gray-600">
+                Are you sure you want to delete location <span className="font-bold text-gray-900">{deletingLocation.name}</span>?
+                This action cannot be undone.
+              </p>
+            </div>
+            <div className="flex gap-4">
+              <Button variant="secondary" className="flex-1" onClick={() => setDeletingLocation(null)}>Cancel</Button>
+              <Button className="flex-1 bg-red-600 hover:bg-red-700" onClick={() => handleDeleteLocation(deletingLocation.id)}>Delete</Button>
+            </div>
+          </GlassModal>
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {deletingLog && (
+          <GlassModal 
+            title="Delete Visit Log" 
+            onClose={() => setDeletingLog(null)}
+          >
+            <div className="mb-8 text-center">
+              <div className="w-20 h-20 bg-red-50 text-red-600 rounded-3xl flex items-center justify-center mx-auto mb-6">
+                <Trash2 size={40} />
+              </div>
+              <p className="text-gray-600">
+                Are you sure you want to delete the visit log for <span className="font-bold text-gray-900">{deletingLog.client_name}</span>?
+                This action cannot be undone.
+              </p>
+            </div>
+            <div className="flex gap-4">
+              <Button variant="secondary" className="flex-1" onClick={() => setDeletingLog(null)}>Cancel</Button>
+              <Button className="flex-1 bg-red-600 hover:bg-red-700" onClick={() => handleDeleteLog(deletingLog.id)}>Delete</Button>
+            </div>
+          </GlassModal>
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
         {toast && (
           <Toast 
             message={toast.message} 
@@ -1390,8 +1803,13 @@ export default function App() {
         )}
       </AnimatePresence>
       <datalist id="client-list">
-        {CLIENTS.map(client => (
-          <option key={client} value={client} />
+        {clients.map(client => (
+          <option key={client.id} value={client.name} />
+        ))}
+      </datalist>
+      <datalist id="location-list">
+        {locations.map(loc => (
+          <option key={loc.id} value={loc.name} />
         ))}
       </datalist>
     </div>

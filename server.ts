@@ -91,7 +91,6 @@ async function seedAdmin() {
   const snapshot = await usersRef.where('username', '==', adminEmail).get();
   
   if (snapshot.empty) {
-    // Check for old 'admin'
     const oldAdminSnapshot = await usersRef.where('username', '==', 'admin').get();
     if (!oldAdminSnapshot.empty) {
       const oldAdminDoc = oldAdminSnapshot.docs[0];
@@ -109,14 +108,58 @@ async function seedAdmin() {
   }
 }
 
+// Seed Clients and Locations
+async function seedData() {
+  if (!db) return;
+  
+  const clientsRef = db.collection('clients');
+  const clientsSnapshot = await clientsRef.limit(1).get();
+  if (clientsSnapshot.empty) {
+    console.log("[SEED] Seeding clients...");
+    const initialClients = [
+      "BNM Institute of technology", "CMR Engineering College", "Dayanand Sagar Institutions + (DODE)",
+      "Dr.N.G.P. Institute of Technology", "GITAM", "GVPEC", "J.N.N. Institute of Engineering",
+      "JSPM's Jayawantrao Sawant College Of Engineering (JSCOE)", "Kakatiya Institute of Technology and Science",
+      "Knowledge Institute of Technology", "Lovely Professional University", "Manipal University, Jaipur",
+      "Nandha College of Engineering & Technology", "NIIT University", "Parul University",
+      "Prasad V. Potluri Siddhartha Institute Of Technology", "PSG College Of Technology and Institute of Technology",
+      "Rajalakshmi Engineering College", "RMK", "SGT University", "Sri Ramakrishna Engineering College",
+      "Sri Ramakrishna Institute of Technology", "SRM IST", "Thiagaraja College Enginnering",
+      "Vallurupalli Nageswara Rao Vignana Jyothi Institute of Engineering &Technology",
+      "Vel Tech University, Hightech & MultiTech", "VIT AP", "VIT Chennai", "VIT Softskills - Vellore, chennai, AP",
+      "VIT Vellore", "Hindusthan Institute of Technology", "Mahendra College of Engineering", "PSG itech",
+      "Noida Institute of Engineering and Technology"
+    ];
+    for (const name of initialClients) {
+      await clientsRef.add({ name, created_at: FieldValue.serverTimestamp() });
+    }
+  }
+
+  const locationsRef = db.collection('locations');
+  const locationsSnapshot = await locationsRef.limit(1).get();
+  if (locationsSnapshot.empty) {
+    console.log("[SEED] Seeding locations...");
+    const initialLocations = ["Bangalore", "Chennai", "Hyderabad", "Coimbatore", "Jaipur", "Noida", "Pune", "Vellore"];
+    for (const name of initialLocations) {
+      await locationsRef.add({ name, created_at: FieldValue.serverTimestamp() });
+    }
+  }
+}
+
 async function startServer() {
   const app = express();
   const PORT = 3000;
 
   app.use(express.json());
 
+  app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+    console.error("[GLOBAL ERROR HANDLER]", err);
+    res.status(500).json({ error: "Internal server error" });
+  });
+
   if (db) {
     await seedAdmin();
+    await seedData();
   }
 
   // --- API Routes ---
@@ -158,8 +201,12 @@ async function startServer() {
       reset_token_expiry: expiry
     });
     
-    const appUrl = process.env.APP_URL || `https://client-tracker.iamneo.com`;
-    const resetLink = `${appUrl}/reset-password?token=${token}`;
+    const host = req.get('x-forwarded-host') || req.get('host');
+    const protocol = req.get('x-forwarded-proto') || 'https';
+    const appUrl = (process.env.APP_URL || `${protocol}://${host}`).replace(/\/$/, '');
+    
+    const resetLink = `${appUrl}/?mode=reset&token=${token}`;
+    console.log(`[AUTH] Generated reset link: ${resetLink}`);
 
     try {
       await sendMail({
@@ -190,17 +237,63 @@ async function startServer() {
     
     const snapshot = await db.collection('users')
       .where('reset_token', '==', token)
-      .where('reset_token_expiry', '>', now)
       .get();
     
-    if (snapshot.empty) return res.status(400).json({ error: "Invalid or expired reset token" });
+    if (snapshot.empty) return res.status(400).json({ error: "Invalid reset token" });
     const userDoc = snapshot.docs[0];
+    const userData = userDoc.data();
+
+    if (userData.reset_token_expiry < now) {
+      return res.status(400).json({ error: "Reset token has expired" });
+    }
 
     await userDoc.ref.update({
       password: password,
       reset_token: FieldValue.delete(),
       reset_token_expiry: FieldValue.delete()
     });
+    res.json({ success: true });
+  });
+
+  // Client Management
+  app.get("/api/clients", async (req, res) => {
+    if (!db) return res.status(500).json({ error: "Database not connected" });
+    const snapshot = await db.collection('clients').orderBy('name').get();
+    const clients = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    res.json(clients);
+  });
+
+  app.post("/api/clients", async (req, res) => {
+    if (!db) return res.status(500).json({ error: "Database not connected" });
+    const { name } = req.body;
+    const docRef = await db.collection('clients').add({ name, created_at: FieldValue.serverTimestamp() });
+    res.json({ id: docRef.id });
+  });
+
+  app.delete("/api/clients/:id", async (req, res) => {
+    if (!db) return res.status(500).json({ error: "Database not connected" });
+    await db.collection('clients').doc(req.params.id).delete();
+    res.json({ success: true });
+  });
+
+  // Location Management
+  app.get("/api/locations", async (req, res) => {
+    if (!db) return res.status(500).json({ error: "Database not connected" });
+    const snapshot = await db.collection('locations').orderBy('name').get();
+    const locations = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    res.json(locations);
+  });
+
+  app.post("/api/locations", async (req, res) => {
+    if (!db) return res.status(500).json({ error: "Database not connected" });
+    const { name } = req.body;
+    const docRef = await db.collection('locations').add({ name, created_at: FieldValue.serverTimestamp() });
+    res.json({ id: docRef.id });
+  });
+
+  app.delete("/api/locations/:id", async (req, res) => {
+    if (!db) return res.status(500).json({ error: "Database not connected" });
+    await db.collection('locations').doc(req.params.id).delete();
     res.json({ success: true });
   });
 
@@ -233,8 +326,12 @@ async function startServer() {
         created_at: FieldValue.serverTimestamp()
       });
       
-      const appUrl = process.env.APP_URL || `https://client-tracker.iamneo.com`;
-      const inviteLink = `${appUrl}/activate?token=${token}`;
+      const host = req.get('x-forwarded-host') || req.get('host');
+      const protocol = req.get('x-forwarded-proto') || 'https';
+      const appUrl = (process.env.APP_URL || `${protocol}://${host}`).replace(/\/$/, '');
+      
+      const inviteLink = `${appUrl}/?mode=activate&token=${token}`;
+      console.log(`[AUTH] Generated invite link: ${inviteLink}`);
 
       await sendMail({
         to: username,
@@ -264,11 +361,15 @@ async function startServer() {
     const now = new Date().toISOString();
     const snapshot = await db.collection('users')
       .where('invitation_token', '==', token)
-      .where('invitation_token_expiry', '>', now)
       .get();
     
-    if (snapshot.empty) return res.status(400).json({ error: "Invalid or expired invitation token" });
+    if (snapshot.empty) return res.status(400).json({ error: "Invalid invitation token" });
     const userDoc = snapshot.docs[0];
+    const userData = userDoc.data();
+
+    if (userData.invitation_token_expiry < now) {
+      return res.status(400).json({ error: "Invitation token has expired" });
+    }
 
     await userDoc.ref.update({
       name,
@@ -286,20 +387,35 @@ async function startServer() {
     const now = new Date().toISOString();
 
     let snapshot;
+    let isValid = false;
+    let errorMsg = "This link is invalid or has expired. Please request a new link or contact your administrator.";
+
     if (type === 'reset') {
       snapshot = await db.collection('users')
         .where('reset_token', '==', token)
-        .where('reset_token_expiry', '>', now)
         .get();
+      
+      if (!snapshot.empty) {
+        const userData = snapshot.docs[0].data();
+        if (userData.reset_token_expiry > now) {
+          isValid = true;
+        }
+      }
     } else {
       snapshot = await db.collection('users')
         .where('invitation_token', '==', token)
-        .where('invitation_token_expiry', '>', now)
         .get();
+      
+      if (!snapshot.empty) {
+        const userData = snapshot.docs[0].data();
+        if (userData.invitation_token_expiry > now) {
+          isValid = true;
+        }
+      }
     }
 
-    if (snapshot.empty) {
-      return res.status(400).json({ valid: false, error: "This link is invalid or has expired. Please request a new link or contact your administrator." });
+    if (!isValid) {
+      return res.status(400).json({ valid: false, error: errorMsg });
     }
 
     res.json({ valid: true });
@@ -338,18 +454,27 @@ async function startServer() {
       query = query.where('user_id', '==', userId);
     }
 
-    const snapshot = await query.orderBy('date_from', 'desc').get();
+    const snapshot = await query.get();
     
-    // Fetch user names for logs
-    const logs = await Promise.all(snapshot.docs.map(async doc => {
+    // Fetch related names for logs
+    let logs = await Promise.all(snapshot.docs.map(async doc => {
       const data = doc.data();
-      const userDoc = await db!.collection('users').doc(data.user_id).get();
+      const [userDoc, clientDoc, locationDoc] = await Promise.all([
+        db!.collection('users').doc(data.user_id).get(),
+        data.client_id ? db!.collection('clients').doc(data.client_id).get() : Promise.resolve(null),
+        data.location_id ? db!.collection('locations').doc(data.location_id).get() : Promise.resolve(null)
+      ]);
+
       return { 
         id: doc.id, 
         ...data, 
-        user_name: userDoc.exists ? (userDoc.data() as any).name : 'Unknown' 
+        user_name: userDoc.exists ? (userDoc.data() as any).name : 'Unknown',
+        client_name: clientDoc?.exists ? (clientDoc.data() as any).name : (data.client_name || 'Unknown'),
+        location_name: locationDoc?.exists ? (locationDoc.data() as any).name : (data.location || 'Unknown')
       };
     }));
+
+    logs.sort((a, b) => new Date(b.date_from).getTime() - new Date(a.date_from).getTime());
     
     res.json(logs);
   });
@@ -368,7 +493,10 @@ async function startServer() {
     if (!db) return res.status(500).json({ error: "Database not connected" });
     const { id } = req.params;
     const logData = req.body;
-    await db.collection('visit_logs').doc(id).update(logData);
+    await db.collection('visit_logs').doc(id).update({
+      ...logData,
+      updated_at: FieldValue.serverTimestamp()
+    });
     res.json({ success: true });
   });
 
@@ -392,7 +520,7 @@ async function startServer() {
     const logs = snapshot.docs.map(doc => doc.data());
 
     const total_visits = logs.length;
-    const uniqueClients = new Set(logs.map(l => l.client_name));
+    const uniqueClients = new Set(logs.map(l => l.client_id || l.client_name));
     const total_clients = uniqueClients.size;
     
     let total_days = 0;
@@ -403,7 +531,9 @@ async function startServer() {
     logs.forEach(log => {
       const start = new Date(log.date_from);
       const end = new Date(log.date_to);
-      const days = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+      const durationInHours = (end.getTime() - start.getTime()) / (1000 * 60 * 60);
+      const days = Math.max(0.5, Math.ceil(durationInHours / 12) * 0.5);
+      
       total_days += days;
       total_installations += (log.systems_installed || 0);
       total_enrolled += (log.students_enrolled || 0);
@@ -417,11 +547,25 @@ async function startServer() {
       total_clients,
       total_days,
       total_installations,
+      total_enrolled,
+      total_attended,
       success_rate: parseFloat(successRate.toFixed(2))
     });
   });
 
-  // Vite middleware for development
+  // SPA routes
+  app.get(["/activate", "/reset-password"], (req, res, next) => {
+    const __dirname = path.resolve();
+    if (process.env.NODE_ENV !== "production") {
+      const token = req.query.token;
+      const mode = req.path === "/activate" ? "activate" : "reset";
+      res.redirect(`/?mode=${mode}&token=${token}`);
+    } else {
+      res.sendFile(path.join(__dirname, "dist", "index.html"));
+    }
+  });
+
+  // Vite middleware
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
       server: { middlewareMode: true },
