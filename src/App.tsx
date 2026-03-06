@@ -925,14 +925,14 @@ export default function App() {
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -20 }}
-              className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6"
+              className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
             >
-              <Card className="flex items-center gap-4 relative group">
-                <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center">
+              <Card className="flex items-center gap-4 relative group h-full hover:shadow-md hover:-translate-y-1 transition-all duration-300 border-blue-100/50">
+                <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center shrink-0">
                   <ClipboardList size={24} />
                 </div>
                 <div className="flex-1">
-                  <p className="text-sm text-gray-500 font-medium">Total Visits</p>
+                  <p className="text-sm text-gray-500 font-medium tracking-tight">Total Visits</p>
                   <p className="text-2xl font-bold text-gray-900">{stats.total_visits}</p>
                 </div>
                 <button 
@@ -943,39 +943,39 @@ export default function App() {
                   {showDetailedVisits ? <EyeOff size={16} /> : <Eye size={16} />}
                 </button>
               </Card>
-              <Card className="flex items-center gap-4">
-                <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center">
+              <Card className="flex items-center gap-4 h-full hover:shadow-md hover:-translate-y-1 transition-all duration-300 border-indigo-100/50">
+                <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center shrink-0">
                   <Building2 size={24} />
                 </div>
-                <div>
-                  <p className="text-sm text-gray-500 font-medium">Unique Clients</p>
+                <div className="flex-1">
+                  <p className="text-sm text-gray-500 font-medium tracking-tight">Unique Clients</p>
                   <p className="text-2xl font-bold text-gray-900">{stats.total_clients}</p>
                 </div>
               </Card>
-              <Card className="flex items-center gap-4">
-                <div className="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center">
+              <Card className="flex items-center gap-4 h-full hover:shadow-md hover:-translate-y-1 transition-all duration-300 border-amber-100/50">
+                <div className="w-12 h-12 bg-amber-50 text-amber-600 rounded-xl flex items-center justify-center shrink-0">
                   <Calendar size={24} />
                 </div>
-                <div>
-                  <p className="text-sm text-gray-500 font-medium">Days Spent</p>
+                <div className="flex-1">
+                  <p className="text-sm text-gray-500 font-medium tracking-tight">Days Spent</p>
                   <p className="text-2xl font-bold text-gray-900">{stats.total_days}</p>
                 </div>
               </Card>
-              <Card className="flex items-center gap-4">
-                <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center">
+              <Card className="flex items-center gap-4 h-full hover:shadow-md hover:-translate-y-1 transition-all duration-300 border-violet-100/50">
+                <div className="w-12 h-12 bg-violet-50 text-violet-600 rounded-xl flex items-center justify-center shrink-0">
                   <TrendingUp size={24} />
                 </div>
-                <div>
-                  <p className="text-sm text-gray-500 font-medium">Total Installations</p>
+                <div className="flex-1">
+                  <p className="text-sm text-gray-500 font-medium tracking-tight">Total Installations</p>
                   <p className="text-2xl font-bold text-gray-900">{stats.total_installations}</p>
                 </div>
               </Card>
-              <Card className="flex items-center gap-4">
-                <div className="w-12 h-12 bg-orange-50 text-orange-600 rounded-xl flex items-center justify-center">
+              <Card className="flex items-center gap-4 h-full hover:shadow-md hover:-translate-y-1 transition-all duration-300 border-orange-100/50">
+                <div className="w-12 h-12 bg-orange-50 text-orange-600 rounded-xl flex items-center justify-center shrink-0">
                   <CheckCircle2 size={24} />
                 </div>
-                <div>
-                  <p className="text-sm text-gray-500 font-medium">Success Rate</p>
+                <div className="flex-1">
+                  <p className="text-sm text-gray-500 font-medium tracking-tight">Success Rate</p>
                   <p className="text-2xl font-bold text-gray-900">
                     {stats.success_rate}%
                     <span className="text-xs text-gray-400 ml-2 font-normal">
@@ -984,12 +984,12 @@ export default function App() {
                   </p>
                 </div>
               </Card>
-              <Card className="flex items-center gap-4">
-                <div className="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center">
+              <Card className="flex items-center gap-4 h-full hover:shadow-md hover:-translate-y-1 transition-all duration-300 border-emerald-100/50">
+                <div className="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center shrink-0">
                   <IndianRupee size={24} />
                 </div>
-                <div>
-                  <p className="text-sm text-gray-500 font-medium">Total Expense</p>
+                <div className="flex-1">
+                  <p className="text-sm text-gray-500 font-medium tracking-tight">Total Expense</p>
                   <p className="text-2xl font-bold text-gray-900">₹{(stats.total_expense || 0).toLocaleString()}</p>
                 </div>
               </Card>
@@ -1005,17 +1005,26 @@ export default function App() {
               <h3 className="text-lg font-bold text-gray-900">Recent Visit Details</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {logs.slice(0, 6).map(log => (
-                  <Card key={log.id} className="p-4">
-                    <div className="flex justify-between items-start mb-2">
-                      <h4 className="font-bold text-gray-900 truncate pr-2">{log.client_name}</h4>
-                      <span className="text-[10px] px-1.5 py-0.5 bg-gray-100 text-gray-600 rounded uppercase font-bold tracking-tighter">
-                        {log.purpose}
-                      </span>
+                  <Card key={log.id} className="p-4 flex items-center gap-4 hover:border-indigo-100 transition-colors">
+                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${
+                      log.purpose === 'Installation' ? 'bg-blue-50 text-blue-600' : 
+                      log.purpose === 'Exam Support' ? 'bg-orange-50 text-orange-600' : 'bg-violet-50 text-violet-600'
+                    }`}>
+                      {log.purpose === 'Installation' ? <TrendingUp size={20} /> : 
+                       log.purpose === 'Exam Support' ? <Users size={20} /> : <ClipboardList size={20} />}
                     </div>
-                    <p className="text-xs text-gray-500 mb-2">{log.date_from}</p>
-                    <div className="flex justify-between items-center text-xs">
-                      <span className="text-indigo-600 font-medium">{log.user_name}</span>
-                      <span className="font-bold">₹{(log.travel_cost + log.lodging_cost + log.misc_expense).toFixed(0)}</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex justify-between items-start">
+                        <h4 className="font-bold text-gray-900 truncate text-sm">{log.client_name}</h4>
+                        <span className="text-[9px] px-1.5 py-0.5 bg-gray-100 text-gray-500 rounded uppercase font-bold tracking-wider shrink-0 ml-2">
+                          {log.purpose.split(' ')[0]}
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-gray-400 mb-1">{log.date_from.split('T')[0]}</p>
+                      <div className="flex justify-between items-center text-[11px]">
+                        <span className="text-indigo-600 font-medium truncate max-w-[100px]">{log.user_name}</span>
+                        <span className="font-bold text-gray-700">₹{(log.travel_cost + log.lodging_cost + log.misc_expense).toFixed(0)}</span>
+                      </div>
                     </div>
                   </Card>
                 ))}
