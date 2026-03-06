@@ -267,32 +267,38 @@ export default function App() {
     try {
       // Fetch Stats
       const statsRes = await fetch(`/api/stats?userId=${user.id}&role=${user.role}`);
+      if (!statsRes.ok) throw new Error(`Stats fetch failed: ${statsRes.status}`);
       const statsData = await statsRes.json();
       setStats(statsData);
 
       // Fetch Logs
       const logsRes = await fetch(`/api/logs?userId=${user.id}&role=${user.role}`);
+      if (!logsRes.ok) throw new Error(`Logs fetch failed: ${logsRes.status}`);
       const logsData = await logsRes.json();
       setLogs(logsData);
 
       // Fetch Clients
       const clientsRes = await fetch('/api/clients');
+      if (!clientsRes.ok) throw new Error(`Clients fetch failed: ${clientsRes.status}`);
       const clientsData = await clientsRes.json();
       setClients(clientsData);
 
       // Fetch Locations
       const locationsRes = await fetch('/api/locations');
+      if (!locationsRes.ok) throw new Error(`Locations fetch failed: ${locationsRes.status}`);
       const locationsData = await locationsRes.json();
       setLocations(locationsData);
 
       // Fetch Users if Admin
       if (user.role === 'admin') {
         const usersRes = await fetch('/api/users');
+        if (!usersRes.ok) throw new Error(`Users fetch failed: ${usersRes.status}`);
         const usersData = await usersRes.json();
         setAllUsers(usersData);
       }
     } catch (err) {
       console.error("Error fetching data:", err);
+      showToast("Failed to connect to server. Please try again.", "error");
     }
   };
 

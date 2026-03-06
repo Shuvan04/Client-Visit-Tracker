@@ -158,11 +158,19 @@ async function startServer() {
   });
 
   if (db) {
-    await seedAdmin();
-    await seedData();
+    try {
+      await seedAdmin();
+      await seedData();
+    } catch (seedError) {
+      console.error("[SEED ERROR] Seeding failed but continuing to start server:", seedError);
+    }
   }
 
   // --- API Routes ---
+
+  app.get("/api/health", (req, res) => {
+    res.json({ status: "ok", db: !!db });
+  });
 
   // Auth
   app.post("/api/login", async (req, res) => {
