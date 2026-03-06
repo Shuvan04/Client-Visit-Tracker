@@ -527,6 +527,7 @@ async function startServer() {
     let total_installations = 0;
     let total_enrolled = 0;
     let total_attended = 0;
+    let total_expense = 0;
 
     logs.forEach(log => {
       const start = new Date(log.date_from);
@@ -538,6 +539,7 @@ async function startServer() {
       total_installations += (log.systems_installed || 0);
       total_enrolled += (log.students_enrolled || 0);
       total_attended += (log.students_attended || 0);
+      total_expense += (log.travel_cost || 0) + (log.lodging_cost || 0) + (log.misc_expense || 0);
     });
 
     const successRate = total_enrolled > 0 ? (total_attended / total_enrolled) * 100 : 0;
@@ -549,7 +551,8 @@ async function startServer() {
       total_installations,
       total_enrolled,
       total_attended,
-      success_rate: parseFloat(successRate.toFixed(2))
+      success_rate: parseFloat(successRate.toFixed(2)),
+      total_expense
     });
   });
 

@@ -48,4 +48,5 @@ export interface DashboardStats {
   total_enrolled: number;
   total_attended: number;
   success_rate: number;
+  total_expense: number;
 }

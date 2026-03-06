@@ -168,7 +168,8 @@ export default function App() {
     total_installations: 0, 
     total_enrolled: 0,
     total_attended: 0,
-    success_rate: 0 
+    success_rate: 0,
+    total_expense: 0
   });
   const [allUsers, setAllUsers] = useState<User[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
@@ -918,7 +919,7 @@ export default function App() {
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -20 }}
-              className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6"
+              className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6"
             >
               <Card className="flex items-center gap-4 relative group">
                 <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center">
@@ -975,6 +976,15 @@ export default function App() {
                       ({stats.total_attended}/{stats.total_enrolled})
                     </span>
                   </p>
+                </div>
+              </Card>
+              <Card className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center">
+                  <IndianRupee size={24} />
+                </div>
+                <div>
+                  <p className="text-sm text-gray-500 font-medium">Total Expense</p>
+                  <p className="text-2xl font-bold text-gray-900">₹{(stats.total_expense || 0).toLocaleString()}</p>
                 </div>
               </Card>
             </motion.div>
@@ -1102,8 +1112,9 @@ export default function App() {
                       <label className="block text-sm font-semibold text-gray-700 mb-2">Number of Systems Installed</label>
                       <Input 
                         type="number" 
+                        min={0}
                         value={String(activityData.systems_installed || 0)}
-                        onChange={e => setActivityData({ ...activityData, systems_installed: parseInt(e.target.value) || 0 })}
+                        onChange={e => setActivityData({ ...activityData, systems_installed: Math.max(0, parseInt(e.target.value) || 0) })}
                       />
                     </div>
                   )}
@@ -1114,16 +1125,18 @@ export default function App() {
                         <label className="block text-sm font-semibold text-gray-700 mb-2">Students Enrolled</label>
                         <Input 
                           type="number" 
+                          min={0}
                           value={String(activityData.students_enrolled || 0)}
-                          onChange={e => setActivityData({ ...activityData, students_enrolled: parseInt(e.target.value) || 0 })}
+                          onChange={e => setActivityData({ ...activityData, students_enrolled: Math.max(0, parseInt(e.target.value) || 0) })}
                         />
                       </div>
                       <div>
                         <label className="block text-sm font-semibold text-gray-700 mb-2">Students Attended</label>
                         <Input 
                           type="number" 
+                          min={0}
                           value={String(activityData.students_attended || 0)}
-                          onChange={e => setActivityData({ ...activityData, students_attended: parseInt(e.target.value) || 0 })}
+                          onChange={e => setActivityData({ ...activityData, students_attended: Math.max(0, parseInt(e.target.value) || 0) })}
                         />
                       </div>
                     </div>
@@ -1147,24 +1160,27 @@ export default function App() {
                         <label className="block text-xs font-semibold text-gray-500 mb-1">Travel Cost</label>
                         <Input 
                           type="number" 
+                          min={0}
                           value={String(activityData.travel_cost || 0)}
-                          onChange={e => setActivityData({ ...activityData, travel_cost: parseFloat(e.target.value) || 0 })}
+                          onChange={e => setActivityData({ ...activityData, travel_cost: Math.max(0, parseFloat(e.target.value) || 0) })}
                         />
                       </div>
                       <div>
                         <label className="block text-xs font-semibold text-gray-500 mb-1">Lodging Cost</label>
                         <Input 
                           type="number" 
+                          min={0}
                           value={String(activityData.lodging_cost || 0)}
-                          onChange={e => setActivityData({ ...activityData, lodging_cost: parseFloat(e.target.value) || 0 })}
+                          onChange={e => setActivityData({ ...activityData, lodging_cost: Math.max(0, parseFloat(e.target.value) || 0) })}
                         />
                       </div>
                       <div>
                         <label className="block text-xs font-semibold text-gray-500 mb-1">Misc Expense</label>
                         <Input 
                           type="number" 
+                          min={0}
                           value={String(activityData.misc_expense || 0)}
-                          onChange={e => setActivityData({ ...activityData, misc_expense: parseFloat(e.target.value) || 0 })}
+                          onChange={e => setActivityData({ ...activityData, misc_expense: Math.max(0, parseFloat(e.target.value) || 0) })}
                         />
                       </div>
                     </div>
@@ -1694,8 +1710,9 @@ export default function App() {
                       <label className="block text-sm font-semibold text-gray-700 mb-2">Number of Systems Installed</label>
                       <Input 
                         type="number" 
+                        min={0}
                         value={String(activityData.systems_installed || 0)}
-                        onChange={e => setActivityData({ ...activityData, systems_installed: parseInt(e.target.value) || 0 })}
+                        onChange={e => setActivityData({ ...activityData, systems_installed: Math.max(0, parseInt(e.target.value) || 0) })}
                       />
                     </div>
                   )}
@@ -1706,16 +1723,18 @@ export default function App() {
                         <label className="block text-sm font-semibold text-gray-700 mb-2">Students Enrolled</label>
                         <Input 
                           type="number" 
+                          min={0}
                           value={String(activityData.students_enrolled || 0)}
-                          onChange={e => setActivityData({ ...activityData, students_enrolled: parseInt(e.target.value) || 0 })}
+                          onChange={e => setActivityData({ ...activityData, students_enrolled: Math.max(0, parseInt(e.target.value) || 0) })}
                         />
                       </div>
                       <div>
                         <label className="block text-sm font-semibold text-gray-700 mb-2">Students Attended</label>
                         <Input 
                           type="number" 
+                          min={0}
                           value={String(activityData.students_attended || 0)}
-                          onChange={e => setActivityData({ ...activityData, students_attended: parseInt(e.target.value) || 0 })}
+                          onChange={e => setActivityData({ ...activityData, students_attended: Math.max(0, parseInt(e.target.value) || 0) })}
                         />
                       </div>
                     </div>
@@ -1739,24 +1758,27 @@ export default function App() {
                         <label className="block text-xs font-semibold text-gray-500 mb-1">Travel Cost</label>
                         <Input 
                           type="number" 
+                          min={0}
                           value={String(activityData.travel_cost || 0)}
-                          onChange={e => setActivityData({ ...activityData, travel_cost: parseFloat(e.target.value) || 0 })}
+                          onChange={e => setActivityData({ ...activityData, travel_cost: Math.max(0, parseFloat(e.target.value) || 0) })}
                         />
                       </div>
                       <div>
                         <label className="block text-xs font-semibold text-gray-500 mb-1">Lodging Cost</label>
                         <Input 
                           type="number" 
+                          min={0}
                           value={String(activityData.lodging_cost || 0)}
-                          onChange={e => setActivityData({ ...activityData, lodging_cost: parseFloat(e.target.value) || 0 })}
+                          onChange={e => setActivityData({ ...activityData, lodging_cost: Math.max(0, parseFloat(e.target.value) || 0) })}
                         />
                       </div>
                       <div>
                         <label className="block text-xs font-semibold text-gray-500 mb-1">Misc Expense</label>
                         <Input 
                           type="number" 
+                          min={0}
                           value={String(activityData.misc_expense || 0)}
-                          onChange={e => setActivityData({ ...activityData, misc_expense: parseFloat(e.target.value) || 0 })}
+                          onChange={e => setActivityData({ ...activityData, misc_expense: Math.max(0, parseFloat(e.target.value) || 0) })}
                         />
                       </div>
                     </div>
