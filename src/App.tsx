@@ -43,10 +43,10 @@ const Input = (props: React.InputHTMLAttributes<HTMLInputElement>) => (
   />
 );
 
-const Select = (props: React.SelectHTMLAttributes<HTMLSelectElement>) => (
+const Select = ({ className = "", ...props }: React.SelectHTMLAttributes<HTMLSelectElement>) => (
   <select 
     {...props} 
-    className="w-full px-4 py-2 rounded-xl border border-black/10 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all bg-white"
+    className={`w-full px-4 py-2 rounded-xl border border-black/10 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all bg-white ${className}`}
   />
 );
 
@@ -120,7 +120,11 @@ const MultiSelect = ({ options, selected, onChange, placeholder }: { options: st
                     }}
                     className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
                   />
-                  <span className="text-sm text-gray-700">{opt}</span>
+                  <span className={`text-sm ${
+                    opt === 'High' ? 'text-red-600 font-bold' : 
+                    opt === 'Medium' ? 'text-orange-600 font-bold' : 
+                    opt === 'Low' ? 'text-yellow-600 font-bold' : 'text-gray-700'
+                  }`}>{opt}</span>
                 </label>
               ))}
               {options.length === 0 && <p className="text-xs text-gray-400 text-center py-4">No options available</p>}
@@ -202,6 +206,7 @@ export default function App() {
     date_from: '',
     date_to: '',
     purpose: 'Installation',
+    escalation_level: 'No',
     systems_installed: 0,
     students_enrolled: 0,
     students_attended: 0,
@@ -221,6 +226,7 @@ export default function App() {
     dateFrom: '',
     dateTo: '',
     purposes: [] as string[],
+    escalationLevels: [] as string[],
     employeeIds: [] as string[]
   });
 
@@ -236,9 +242,10 @@ export default function App() {
     const matchesDate = logFrom >= filterFrom && logTo <= filterTo;
     
     const matchesPurpose = filters.purposes.length === 0 || filters.purposes.includes(log.purpose);
+    const matchesEscalation = filters.escalationLevels.length === 0 || filters.escalationLevels.includes(log.escalation_level || 'No');
     const matchesEmployee = filters.employeeIds.length === 0 || filters.employeeIds.includes(log.user_id.toString());
     
-    return matchesClient && matchesLocation && matchesDate && matchesPurpose && matchesEmployee;
+    return matchesClient && matchesLocation && matchesDate && matchesPurpose && matchesEscalation && matchesEmployee;
   });
 
   useEffect(() => {
@@ -469,6 +476,7 @@ export default function App() {
         date_from: '',
         date_to: '',
         purpose: 'Installation',
+        escalation_level: 'No',
         systems_installed: 0,
         students_enrolled: 0,
         students_attended: 0,
@@ -560,6 +568,7 @@ export default function App() {
       'Date From': log.date_from,
       'Date To': log.date_to,
       'Purpose': log.purpose,
+      'Escalation Level': log.escalation_level || 'No',
       'Systems Installed': log.systems_installed,
       'Students Enrolled': log.students_enrolled,
       'Students Attended': log.students_attended,
@@ -587,6 +596,7 @@ export default function App() {
       log.date_from,
       log.date_to,
       log.purpose,
+      log.escalation_level || 'No',
       log.systems_installed,
       log.students_enrolled,
       log.students_attended,
@@ -598,7 +608,7 @@ export default function App() {
     ]);
 
     autoTable(doc, {
-      head: [['Client', 'Location', 'Employee', 'From', 'To', 'Purpose', 'Systems', 'Enrolled', 'Attended', 'Travel', 'Lodging', 'Misc', 'Total', 'Remarks']],
+      head: [['Client', 'Location', 'Employee', 'From', 'To', 'Purpose', 'Escalation', 'Systems', 'Enrolled', 'Attended', 'Travel', 'Lodging', 'Misc', 'Total', 'Remarks']],
       body: tableData,
       startY: 20,
       styles: { fontSize: 6, cellPadding: 1 },
@@ -1034,16 +1044,35 @@ export default function App() {
                     </div>
                   </div>
 
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">Purpose</label>
-                    <Select 
-                      value={activityData.purpose}
-                      onChange={e => setActivityData({ ...activityData, purpose: e.target.value as any })}
-                    >
-                      <option value="Installation">Installation</option>
-                      <option value="Exam Support">Exam Support</option>
-                      <option value="Exam Support & Installation">Exam Support & Installation</option>
-                    </Select>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">Purpose</label>
+                      <Select 
+                        value={activityData.purpose}
+                        onChange={e => setActivityData({ ...activityData, purpose: e.target.value as any })}
+                      >
+                        <option value="Installation">Installation</option>
+                        <option value="Exam Support">Exam Support</option>
+                        <option value="Exam Support & Installation">Exam Support & Installation</option>
+                      </Select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">Escalation Level</label>
+                      <Select 
+                        value={activityData.escalation_level}
+                        onChange={e => setActivityData({ ...activityData, escalation_level: e.target.value as any })}
+                        className={
+                          activityData.escalation_level === 'High' ? 'text-red-600 font-bold border-red-200 bg-red-50' : 
+                          activityData.escalation_level === 'Medium' ? 'text-orange-600 font-bold border-orange-200 bg-orange-50' : 
+                          activityData.escalation_level === 'Low' ? 'text-yellow-600 font-bold border-yellow-200 bg-yellow-50' : ''
+                        }
+                      >
+                        <option value="No" className="text-gray-600">No</option>
+                        <option value="Low" className="text-yellow-600 font-bold">Low</option>
+                        <option value="Medium" className="text-orange-600 font-bold">Medium</option>
+                        <option value="High" className="text-red-600 font-bold">High</option>
+                      </Select>
+                    </div>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1230,6 +1259,15 @@ export default function App() {
                       placeholder="Select purposes..."
                     />
                   </div>
+                  <div>
+                    <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Escalation</label>
+                    <MultiSelect 
+                      options={['No', 'Low', 'Medium', 'High']}
+                      selected={filters.escalationLevels}
+                      onChange={val => setFilters({ ...filters, escalationLevels: val })}
+                      placeholder="Select escalation..."
+                    />
+                  </div>
                   {user.role === 'admin' && (
                     <div>
                       <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Employees</label>
@@ -1245,9 +1283,9 @@ export default function App() {
                     </div>
                   )}
                 </div>
-                { (filters.clientNames.length > 0 || filters.locations.length > 0 || filters.dateFrom || filters.dateTo || filters.purposes.length > 0 || filters.employeeIds.length > 0) && (
+                { (filters.clientNames.length > 0 || filters.locations.length > 0 || filters.dateFrom || filters.dateTo || filters.purposes.length > 0 || filters.escalationLevels.length > 0 || filters.employeeIds.length > 0) && (
                   <button 
-                    onClick={() => setFilters({ clientNames: [], locations: [], dateFrom: '', dateTo: '', purposes: [], employeeIds: [] })}
+                    onClick={() => setFilters({ clientNames: [], locations: [], dateFrom: '', dateTo: '', purposes: [], escalationLevels: [], employeeIds: [] })}
                     className="mt-4 text-xs text-indigo-600 font-semibold hover:underline"
                   >
                     Clear Filters
@@ -1314,7 +1352,17 @@ export default function App() {
                       </div>
                     </div>
                     
-                    <div className="mt-4 pt-4 border-t border-black/5 grid grid-cols-1 md:grid-cols-4 gap-4 text-sm">
+                    <div className="mt-4 pt-4 border-t border-black/5 grid grid-cols-1 md:grid-cols-5 gap-4 text-sm">
+                      <div>
+                        <p className="text-gray-400 font-medium uppercase text-[10px] tracking-wider">Escalation</p>
+                        <p className={`mt-1 font-bold ${
+                          log.escalation_level === 'High' ? 'text-red-600' : 
+                          log.escalation_level === 'Medium' ? 'text-orange-600' : 
+                          log.escalation_level === 'Low' ? 'text-yellow-600' : 'text-gray-600'
+                        }`}>
+                          {log.escalation_level || 'No'}
+                        </p>
+                      </div>
                       <div>
                         <p className="text-gray-400 font-medium uppercase text-[10px] tracking-wider">Details</p>
                         <p className="text-gray-700 mt-1">
@@ -1588,16 +1636,35 @@ export default function App() {
                     </div>
                   </div>
 
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">Purpose</label>
-                    <Select 
-                      value={activityData.purpose}
-                      onChange={e => setActivityData({ ...activityData, purpose: e.target.value as any })}
-                    >
-                      <option value="Installation">Installation</option>
-                      <option value="Exam Support">Exam Support</option>
-                      <option value="Exam Support & Installation">Exam Support & Installation</option>
-                    </Select>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">Purpose</label>
+                      <Select 
+                        value={activityData.purpose}
+                        onChange={e => setActivityData({ ...activityData, purpose: e.target.value as any })}
+                      >
+                        <option value="Installation">Installation</option>
+                        <option value="Exam Support">Exam Support</option>
+                        <option value="Exam Support & Installation">Exam Support & Installation</option>
+                      </Select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">Escalation Level</label>
+                      <Select 
+                        value={activityData.escalation_level}
+                        onChange={e => setActivityData({ ...activityData, escalation_level: e.target.value as any })}
+                        className={
+                          activityData.escalation_level === 'High' ? 'text-red-600 font-bold border-red-200 bg-red-50' : 
+                          activityData.escalation_level === 'Medium' ? 'text-orange-600 font-bold border-orange-200 bg-orange-50' : 
+                          activityData.escalation_level === 'Low' ? 'text-yellow-600 font-bold border-yellow-200 bg-yellow-50' : ''
+                        }
+                      >
+                        <option value="No" className="text-gray-600">No</option>
+                        <option value="Low" className="text-yellow-600 font-bold">Low</option>
+                        <option value="Medium" className="text-orange-600 font-bold">Medium</option>
+                        <option value="High" className="text-red-600 font-bold">High</option>
+                      </Select>
+                    </div>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

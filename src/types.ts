@@ -22,6 +22,7 @@ export interface VisitLog {
   systems_installed?: number;
   students_enrolled?: number;
   students_attended?: number;
+  escalation_level?: 'No' | 'Low' | 'Medium' | 'High';
   remarks: string;
   travel_cost: number;
   lodging_cost: number;
