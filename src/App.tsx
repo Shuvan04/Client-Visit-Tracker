@@ -157,6 +157,22 @@ const GlassModal = ({ children, onClose, title }: { children: React.ReactNode, o
   </div>
 );
 
+const INITIAL_ACTIVITY_DATA: Partial<VisitLog> = {
+  client_id: '',
+  location_id: '',
+  date_from: '',
+  date_to: '',
+  purpose: 'Installation',
+  escalation_level: 'No',
+  systems_installed: 0,
+  students_enrolled: 0,
+  students_attended: 0,
+  remarks: '',
+  travel_cost: 0,
+  lodging_cost: 0,
+  misc_expense: 0
+};
+
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [view, setView] = useState<'dashboard' | 'logs' | 'activities' | 'users' | 'clients' | 'locations'>('dashboard');
@@ -201,21 +217,7 @@ export default function App() {
   const [loginData, setLoginData] = useState({ username: '', password: '' });
 
   // Activity Form State
-  const [activityData, setActivityData] = useState<Partial<VisitLog>>({
-    client_id: '',
-    location_id: '',
-    date_from: '',
-    date_to: '',
-    purpose: 'Installation',
-    escalation_level: 'No',
-    systems_installed: 0,
-    students_enrolled: 0,
-    students_attended: 0,
-    remarks: '',
-    travel_cost: 0,
-    lodging_cost: 0,
-    misc_expense: 0
-  });
+  const [activityData, setActivityData] = useState<Partial<VisitLog>>(INITIAL_ACTIVITY_DATA);
 
   // User Creation State
   const [newUserData, setNewUserData] = useState({ username: '', role: 'user' as Role });
@@ -456,6 +458,12 @@ export default function App() {
     }
   };
 
+  const closeVisitModal = () => {
+    setIsModalOpen(false);
+    setEditingLog(null);
+    setActivityData(INITIAL_ACTIVITY_DATA);
+  };
+
   const handleCreateActivity = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -475,25 +483,10 @@ export default function App() {
     });
 
     if (res.ok) {
-      setIsModalOpen(false);
-      setEditingLog(null);
-      setActivityData({
-        client_id: '',
-        location_id: '',
-        date_from: '',
-        date_to: '',
-        purpose: 'Installation',
-        escalation_level: 'No',
-        systems_installed: 0,
-        students_enrolled: 0,
-        students_attended: 0,
-        remarks: '',
-        travel_cost: 0,
-        lodging_cost: 0,
-        misc_expense: 0
-      });
+      closeVisitModal();
       fetchData();
       setView('logs');
+      showToast(editingLog ? 'Log updated successfully' : 'Log created successfully');
     }
   };
 
@@ -941,7 +934,11 @@ export default function App() {
             <p className="text-gray-500">Welcome back, {user.name}</p>
           </div>
           {view === 'logs' && (
-            <Button onClick={() => { setEditingLog(null); setIsModalOpen(true); }}>
+            <Button onClick={() => { 
+              setEditingLog(null); 
+              setActivityData(INITIAL_ACTIVITY_DATA);
+              setIsModalOpen(true); 
+            }}>
               <PlusCircle className="inline-block mr-2" size={18} />
               New Visit
             </Button>
@@ -1767,7 +1764,7 @@ export default function App() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              onClick={() => setIsModalOpen(false)}
+              onClick={closeVisitModal}
               className="absolute inset-0 bg-black/40 backdrop-blur-sm"
             />
             <motion.div 
@@ -1780,7 +1777,7 @@ export default function App() {
                 <h3 className="text-xl font-bold text-gray-900">
                   {editingLog ? 'Edit Visit Log' : 'Create New Visit Log'}
                 </h3>
-                <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-gray-600">
+                <button onClick={closeVisitModal} className="text-gray-400 hover:text-gray-600">
                   <X size={24} />
                 </button>
               </div>
@@ -1944,7 +1941,7 @@ export default function App() {
                   </div>
 
                   <div className="flex gap-3 pt-4">
-                    <Button type="button" variant="secondary" className="flex-1" onClick={() => setIsModalOpen(false)}>Cancel</Button>
+                    <Button type="button" variant="secondary" className="flex-1" onClick={closeVisitModal}>Cancel</Button>
                     <Button type="submit" className="flex-1">{editingLog ? 'Update Log' : 'Save Log'}</Button>
                   </div>
                 </form>
