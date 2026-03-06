@@ -592,6 +592,36 @@ export default function App() {
     XLSX.writeFile(workbook, `Visit_Logs_${new Date().toISOString().split('T')[0]}.xlsx`);
   };
 
+  const exportToCSV = () => {
+    const data = filteredLogs.map(log => ({
+      'Client Name': log.client_name,
+      'Location': log.location_name,
+      'Employee': log.user_name,
+      'Date From': log.date_from,
+      'Date To': log.date_to,
+      'Purpose': log.purpose,
+      'Escalation Level': log.escalation_level || 'No',
+      'Systems Installed': log.systems_installed,
+      'Students Enrolled': log.students_enrolled,
+      'Students Attended': log.students_attended,
+      'Travel Cost': log.travel_cost,
+      'Lodging Cost': log.lodging_cost,
+      'Misc Expense': log.misc_expense,
+      'Total Cost': log.travel_cost + log.lodging_cost + log.misc_expense,
+      'Remarks': log.remarks
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(data);
+    const csvOutput = XLSX.utils.sheet_to_csv(worksheet);
+    const blob = new Blob([csvOutput], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.setAttribute('download', `Visit_Logs_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const exportToPDF = () => {
     const doc = new jsPDF('l', 'mm', 'a4');
     doc.text("Client Visit Logs", 14, 15);
@@ -925,111 +955,196 @@ export default function App() {
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -20 }}
-              className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
+              className="space-y-8"
             >
-              <Card className="flex items-center gap-4 relative group h-full hover:shadow-md hover:-translate-y-1 transition-all duration-300 border-blue-100/50">
-                <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center shrink-0">
-                  <ClipboardList size={24} />
-                </div>
-                <div className="flex-1">
-                  <p className="text-sm text-gray-500 font-medium tracking-tight">Total Visits</p>
-                  <p className="text-2xl font-bold text-gray-900">{stats.total_visits}</p>
-                </div>
-                <button 
-                  onClick={() => setShowDetailedVisits(!showDetailedVisits)}
-                  className="absolute bottom-2 right-2 p-1 text-gray-400 hover:text-indigo-600 transition-colors"
-                  title={showDetailedVisits ? "Hide Details" : "Show Details"}
-                >
-                  {showDetailedVisits ? <EyeOff size={16} /> : <Eye size={16} />}
-                </button>
-              </Card>
-              <Card className="flex items-center gap-4 h-full hover:shadow-md hover:-translate-y-1 transition-all duration-300 border-indigo-100/50">
-                <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center shrink-0">
-                  <Building2 size={24} />
-                </div>
-                <div className="flex-1">
-                  <p className="text-sm text-gray-500 font-medium tracking-tight">Unique Clients</p>
-                  <p className="text-2xl font-bold text-gray-900">{stats.total_clients}</p>
-                </div>
-              </Card>
-              <Card className="flex items-center gap-4 h-full hover:shadow-md hover:-translate-y-1 transition-all duration-300 border-amber-100/50">
-                <div className="w-12 h-12 bg-amber-50 text-amber-600 rounded-xl flex items-center justify-center shrink-0">
-                  <Calendar size={24} />
-                </div>
-                <div className="flex-1">
-                  <p className="text-sm text-gray-500 font-medium tracking-tight">Days Spent</p>
-                  <p className="text-2xl font-bold text-gray-900">{stats.total_days}</p>
-                </div>
-              </Card>
-              <Card className="flex items-center gap-4 h-full hover:shadow-md hover:-translate-y-1 transition-all duration-300 border-violet-100/50">
-                <div className="w-12 h-12 bg-violet-50 text-violet-600 rounded-xl flex items-center justify-center shrink-0">
-                  <TrendingUp size={24} />
-                </div>
-                <div className="flex-1">
-                  <p className="text-sm text-gray-500 font-medium tracking-tight">Total Installations</p>
-                  <p className="text-2xl font-bold text-gray-900">{stats.total_installations}</p>
-                </div>
-              </Card>
-              <Card className="flex items-center gap-4 h-full hover:shadow-md hover:-translate-y-1 transition-all duration-300 border-orange-100/50">
-                <div className="w-12 h-12 bg-orange-50 text-orange-600 rounded-xl flex items-center justify-center shrink-0">
-                  <CheckCircle2 size={24} />
-                </div>
-                <div className="flex-1">
-                  <p className="text-sm text-gray-500 font-medium tracking-tight">Success Rate</p>
-                  <p className="text-2xl font-bold text-gray-900">
-                    {stats.success_rate}%
-                    <span className="text-xs text-gray-400 ml-2 font-normal">
-                      ({stats.total_attended}/{stats.total_enrolled})
-                    </span>
-                  </p>
-                </div>
-              </Card>
-              <Card className="flex items-center gap-4 h-full hover:shadow-md hover:-translate-y-1 transition-all duration-300 border-emerald-100/50">
-                <div className="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center shrink-0">
-                  <IndianRupee size={24} />
-                </div>
-                <div className="flex-1">
-                  <p className="text-sm text-gray-500 font-medium tracking-tight">Total Expense</p>
-                  <p className="text-2xl font-bold text-gray-900">₹{(stats.total_expense || 0).toLocaleString()}</p>
-                </div>
-              </Card>
-            </motion.div>
-          )}
-
-          {view === 'dashboard' && showDetailedVisits && (
-            <motion.div 
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="mt-8 space-y-4"
-            >
-              <h3 className="text-lg font-bold text-gray-900">Recent Visit Details</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {logs.slice(0, 6).map(log => (
-                  <Card key={log.id} className="p-4 flex items-center gap-4 hover:border-indigo-100 transition-colors">
-                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${
-                      log.purpose === 'Installation' ? 'bg-blue-50 text-blue-600' : 
-                      log.purpose === 'Exam Support' ? 'bg-orange-50 text-orange-600' : 'bg-violet-50 text-violet-600'
-                    }`}>
-                      {log.purpose === 'Installation' ? <TrendingUp size={20} /> : 
-                       log.purpose === 'Exam Support' ? <Users size={20} /> : <ClipboardList size={20} />}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex justify-between items-start">
-                        <h4 className="font-bold text-gray-900 truncate text-sm">{log.client_name}</h4>
-                        <span className="text-[9px] px-1.5 py-0.5 bg-gray-100 text-gray-500 rounded uppercase font-bold tracking-wider shrink-0 ml-2">
-                          {log.purpose.split(' ')[0]}
-                        </span>
-                      </div>
-                      <p className="text-[10px] text-gray-400 mb-1">{log.date_from.split('T')[0]}</p>
-                      <div className="flex justify-between items-center text-[11px]">
-                        <span className="text-indigo-600 font-medium truncate max-w-[100px]">{log.user_name}</span>
-                        <span className="font-bold text-gray-700">₹{(log.travel_cost + log.lodging_cost + log.misc_expense).toFixed(0)}</span>
-                      </div>
-                    </div>
-                  </Card>
-                ))}
+              {/* Stats Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <Card className="flex items-center gap-4 relative group h-full hover:shadow-md hover:-translate-y-1 transition-all duration-300 border-blue-100/50">
+                  <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center shrink-0">
+                    <ClipboardList size={24} />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm text-gray-500 font-medium tracking-tight">Total Visits</p>
+                    <p className="text-2xl font-bold text-gray-900">{stats.total_visits}</p>
+                  </div>
+                  <button 
+                    onClick={() => setShowDetailedVisits(!showDetailedVisits)}
+                    className="absolute bottom-2 right-2 p-1 text-gray-400 hover:text-indigo-600 transition-colors"
+                    title={showDetailedVisits ? "Hide Details" : "Show Details"}
+                  >
+                    {showDetailedVisits ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </Card>
+                <Card className="flex items-center gap-4 h-full hover:shadow-md hover:-translate-y-1 transition-all duration-300 border-indigo-100/50">
+                  <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center shrink-0">
+                    <Building2 size={24} />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm text-gray-500 font-medium tracking-tight">Unique Clients</p>
+                    <p className="text-2xl font-bold text-gray-900">{stats.total_clients}</p>
+                  </div>
+                </Card>
+                <Card className="flex items-center gap-4 h-full hover:shadow-md hover:-translate-y-1 transition-all duration-300 border-amber-100/50">
+                  <div className="w-12 h-12 bg-amber-50 text-amber-600 rounded-xl flex items-center justify-center shrink-0">
+                    <Calendar size={24} />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm text-gray-500 font-medium tracking-tight">Days Spent</p>
+                    <p className="text-2xl font-bold text-gray-900">{stats.total_days}</p>
+                  </div>
+                </Card>
+                <Card className="flex items-center gap-4 h-full hover:shadow-md hover:-translate-y-1 transition-all duration-300 border-violet-100/50">
+                  <div className="w-12 h-12 bg-violet-50 text-violet-600 rounded-xl flex items-center justify-center shrink-0">
+                    <TrendingUp size={24} />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm text-gray-500 font-medium tracking-tight">Total Installations</p>
+                    <p className="text-2xl font-bold text-gray-900">{stats.total_installations}</p>
+                  </div>
+                </Card>
+                <Card className="flex items-center gap-4 h-full hover:shadow-md hover:-translate-y-1 transition-all duration-300 border-orange-100/50">
+                  <div className="w-12 h-12 bg-orange-50 text-orange-600 rounded-xl flex items-center justify-center shrink-0">
+                    <CheckCircle2 size={24} />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm text-gray-500 font-medium tracking-tight">Success Rate</p>
+                    <p className="text-2xl font-bold text-gray-900">
+                      {stats.success_rate}%
+                      <span className="text-xs text-gray-400 ml-2 font-normal">
+                        ({stats.total_attended}/{stats.total_enrolled})
+                      </span>
+                    </p>
+                  </div>
+                </Card>
+                <Card className="flex items-center gap-4 h-full hover:shadow-md hover:-translate-y-1 transition-all duration-300 border-emerald-100/50">
+                  <div className="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center shrink-0">
+                    <IndianRupee size={24} />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm text-gray-500 font-medium tracking-tight">Total Expense</p>
+                    <p className="text-2xl font-bold text-gray-900">₹{(stats.total_expense || 0).toLocaleString()}</p>
+                  </div>
+                </Card>
               </div>
-              <Button variant="secondary" onClick={() => setView('logs')} className="text-sm">View All Logs</Button>
+
+              {/* Detailed Visits (Conditional) */}
+              <AnimatePresence>
+                {showDetailedVisits && (
+                  <motion.div 
+                    key="detailed-visits-section"
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="overflow-hidden"
+                  >
+                    <div className="pt-4 space-y-4">
+                      <h3 className="text-lg font-bold text-gray-900">Recent Visit Details</h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {logs.slice(0, 6).map(log => (
+                          <Card key={`detail-${log.id}`} className="p-4 flex items-center gap-4 hover:border-indigo-100 transition-colors">
+                            <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${
+                              log.purpose === 'Installation' ? 'bg-blue-50 text-blue-600' : 
+                              log.purpose === 'Exam Support' ? 'bg-orange-50 text-orange-600' : 'bg-violet-50 text-violet-600'
+                            }`}>
+                              {log.purpose === 'Installation' ? <TrendingUp size={20} /> : 
+                               log.purpose === 'Exam Support' ? <Users size={20} /> : <ClipboardList size={20} />}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex justify-between items-start">
+                                <h4 className="font-bold text-gray-900 truncate text-sm">{log.client_name}</h4>
+                                <span className="text-[9px] px-1.5 py-0.5 bg-gray-100 text-gray-500 rounded uppercase font-bold tracking-wider shrink-0 ml-2">
+                                  {log.purpose.split(' ')[0]}
+                                </span>
+                              </div>
+                              <p className="text-[10px] text-gray-400 mb-1">{log.date_from.split('T')[0]}</p>
+                              <div className="flex justify-between items-center text-[11px]">
+                                <span className="text-indigo-600 font-medium truncate max-w-[100px]">{log.user_name}</span>
+                                <span className="font-bold text-gray-700">₹{(log.travel_cost + log.lodging_cost + log.misc_expense).toFixed(0)}</span>
+                              </div>
+                            </div>
+                          </Card>
+                        ))}
+                      </div>
+                      <Button variant="secondary" onClick={() => setView('logs')} className="text-sm">View All Logs</Button>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              {/* Visit Logs Overview (Excel Sheet View) */}
+              <div className="space-y-6">
+                <div className="flex justify-between items-center">
+                  <div>
+                    <h3 className="text-lg font-bold text-gray-900">Visit Logs Overview</h3>
+                    <p className="text-sm text-gray-500">Full history of client interactions</p>
+                  </div>
+                  <div className="flex gap-2">
+                    <button 
+                      onClick={exportToExcel}
+                      className="flex items-center gap-2 px-3 py-1.5 bg-emerald-50 text-emerald-700 rounded-lg text-xs font-bold hover:bg-emerald-100 transition-colors border border-emerald-100"
+                    >
+                      <FileSpreadsheet size={14} />
+                      .XLSX
+                    </button>
+                    <button 
+                      onClick={exportToCSV}
+                      className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 text-blue-700 rounded-lg text-xs font-bold hover:bg-blue-100 transition-colors border border-blue-100"
+                    >
+                      <FileText size={14} />
+                      .CSV
+                    </button>
+                  </div>
+                </div>
+
+                <Card className="p-0 overflow-hidden border-black/5 shadow-sm">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="bg-gray-50/50 border-bottom border-black/5">
+                          <th className="px-4 py-3 text-[10px] font-bold text-gray-400 uppercase tracking-wider">Client</th>
+                          <th className="px-4 py-3 text-[10px] font-bold text-gray-400 uppercase tracking-wider">Location</th>
+                          <th className="px-4 py-3 text-[10px] font-bold text-gray-400 uppercase tracking-wider">Purpose</th>
+                          <th className="px-4 py-3 text-[10px] font-bold text-gray-400 uppercase tracking-wider">Date</th>
+                          <th className="px-4 py-3 text-[10px] font-bold text-gray-400 uppercase tracking-wider text-right">Expense</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-black/5">
+                        {logs.slice(0, 10).map(log => (
+                          <tr key={`row-${log.id}`} className="hover:bg-gray-50/50 transition-colors group">
+                            <td className="px-4 py-3">
+                              <p className="text-sm font-bold text-gray-900">{log.client_name}</p>
+                              <p className="text-[10px] text-indigo-600 font-medium">{log.user_name}</p>
+                            </td>
+                            <td className="px-4 py-3 text-xs text-gray-600">{log.location_name}</td>
+                            <td className="px-4 py-3">
+                              <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-tighter ${
+                                log.purpose === 'Installation' ? 'bg-blue-50 text-blue-600' : 
+                                log.purpose === 'Exam Support' ? 'bg-orange-50 text-orange-600' : 'bg-violet-50 text-violet-600'
+                              }`}>
+                                {log.purpose}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 text-xs text-gray-500">{log.date_from.split('T')[0]}</td>
+                            <td className="px-4 py-3 text-sm font-bold text-gray-900 text-right">
+                              ₹{(log.travel_cost + log.lodging_cost + log.misc_expense).toLocaleString()}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  {logs.length > 10 && (
+                    <div className="p-4 bg-gray-50/30 border-t border-black/5 text-center">
+                      <button 
+                        onClick={() => setView('logs')}
+                        className="text-xs font-bold text-indigo-600 hover:underline"
+                      >
+                        View all {logs.length} logs in detail
+                      </button>
+                    </div>
+                  )}
+                </Card>
+              </div>
             </motion.div>
           )}
 
