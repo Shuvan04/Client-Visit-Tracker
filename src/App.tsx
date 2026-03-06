@@ -1098,25 +1098,34 @@ export default function App() {
 
                 <Card className="p-0 overflow-hidden border-black/5 shadow-sm">
                   <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse">
+                    <table className="w-full text-left border-collapse min-w-[1200px]">
                       <thead>
                         <tr className="bg-gray-50/50 border-bottom border-black/5">
-                          <th className="px-4 py-3 text-[10px] font-bold text-gray-400 uppercase tracking-wider">Client</th>
+                          <th className="px-4 py-3 text-[10px] font-bold text-gray-400 uppercase tracking-wider sticky left-0 bg-gray-50/50 z-10">Client</th>
+                          <th className="px-4 py-3 text-[10px] font-bold text-gray-400 uppercase tracking-wider">Employee</th>
                           <th className="px-4 py-3 text-[10px] font-bold text-gray-400 uppercase tracking-wider">Location</th>
                           <th className="px-4 py-3 text-[10px] font-bold text-gray-400 uppercase tracking-wider">Purpose</th>
-                          <th className="px-4 py-3 text-[10px] font-bold text-gray-400 uppercase tracking-wider">Date</th>
-                          <th className="px-4 py-3 text-[10px] font-bold text-gray-400 uppercase tracking-wider text-right">Expense</th>
+                          <th className="px-4 py-3 text-[10px] font-bold text-gray-400 uppercase tracking-wider">Date From</th>
+                          <th className="px-4 py-3 text-[10px] font-bold text-gray-400 uppercase tracking-wider">Date To</th>
+                          <th className="px-4 py-3 text-[10px] font-bold text-gray-400 uppercase tracking-wider">Escalation</th>
+                          <th className="px-4 py-3 text-[10px] font-bold text-gray-400 uppercase tracking-wider">Systems</th>
+                          <th className="px-4 py-3 text-[10px] font-bold text-gray-400 uppercase tracking-wider">Students</th>
+                          <th className="px-4 py-3 text-[10px] font-bold text-gray-400 uppercase tracking-wider">Travel</th>
+                          <th className="px-4 py-3 text-[10px] font-bold text-gray-400 uppercase tracking-wider">Lodging</th>
+                          <th className="px-4 py-3 text-[10px] font-bold text-gray-400 uppercase tracking-wider">Misc</th>
+                          <th className="px-4 py-3 text-[10px] font-bold text-gray-400 uppercase tracking-wider text-right">Total</th>
+                          <th className="px-4 py-3 text-[10px] font-bold text-gray-400 uppercase tracking-wider">Remarks</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-black/5">
                         {logs.slice(0, 10).map(log => (
                           <tr key={`row-${log.id}`} className="hover:bg-gray-50/50 transition-colors group">
-                            <td className="px-4 py-3">
-                              <p className="text-sm font-bold text-gray-900">{log.client_name}</p>
-                              <p className="text-[10px] text-indigo-600 font-medium">{log.user_name}</p>
+                            <td className="px-4 py-3 sticky left-0 bg-white group-hover:bg-gray-50/50 z-10 border-r border-black/5">
+                              <p className="text-sm font-bold text-gray-900 whitespace-nowrap">{log.client_name}</p>
                             </td>
-                            <td className="px-4 py-3 text-xs text-gray-600">{log.location_name}</td>
-                            <td className="px-4 py-3">
+                            <td className="px-4 py-3 text-xs text-indigo-600 font-medium whitespace-nowrap">{log.user_name}</td>
+                            <td className="px-4 py-3 text-xs text-gray-600 whitespace-nowrap">{log.location_name}</td>
+                            <td className="px-4 py-3 whitespace-nowrap">
                               <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-tighter ${
                                 log.purpose === 'Installation' ? 'bg-blue-50 text-blue-600' : 
                                 log.purpose === 'Exam Support' ? 'bg-orange-50 text-orange-600' : 'bg-violet-50 text-violet-600'
@@ -1124,9 +1133,29 @@ export default function App() {
                                 {log.purpose}
                               </span>
                             </td>
-                            <td className="px-4 py-3 text-xs text-gray-500">{log.date_from.split('T')[0]}</td>
-                            <td className="px-4 py-3 text-sm font-bold text-gray-900 text-right">
+                            <td className="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">{log.date_from.split('T')[0]}</td>
+                            <td className="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">{log.date_to.split('T')[0]}</td>
+                            <td className="px-4 py-3 whitespace-nowrap">
+                              <span className={`text-[10px] font-bold ${
+                                log.escalation_level === 'High' ? 'text-red-600' : 
+                                log.escalation_level === 'Medium' ? 'text-orange-600' : 
+                                log.escalation_level === 'Low' ? 'text-yellow-600' : 'text-gray-400'
+                              }`}>
+                                {log.escalation_level || 'None'}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 text-xs text-gray-600 text-center">{log.systems_installed || '-'}</td>
+                            <td className="px-4 py-3 text-xs text-gray-600 whitespace-nowrap">
+                              {log.students_enrolled ? `${log.students_attended}/${log.students_enrolled}` : '-'}
+                            </td>
+                            <td className="px-4 py-3 text-xs text-gray-600">₹{log.travel_cost.toLocaleString()}</td>
+                            <td className="px-4 py-3 text-xs text-gray-600">₹{log.lodging_cost.toLocaleString()}</td>
+                            <td className="px-4 py-3 text-xs text-gray-600">₹{log.misc_expense.toLocaleString()}</td>
+                            <td className="px-4 py-3 text-sm font-bold text-gray-900 text-right whitespace-nowrap">
                               ₹{(log.travel_cost + log.lodging_cost + log.misc_expense).toLocaleString()}
+                            </td>
+                            <td className="px-4 py-3 text-xs text-gray-500 max-w-xs truncate" title={log.remarks}>
+                              {log.remarks || '-'}
                             </td>
                           </tr>
                         ))}
