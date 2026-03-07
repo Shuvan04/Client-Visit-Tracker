@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   LayoutDashboard, 
   ClipboardList, 
@@ -168,9 +168,8 @@ const INITIAL_ACTIVITY_DATA: Partial<VisitLog> = {
   students_enrolled: 0,
   students_attended: 0,
   remarks: '',
-  travel_cost: 0,
-  lodging_cost: 0,
-  misc_expense: 0
+  user_ids: [],
+  expenses: {}
 };
 
 export default function App() {
@@ -218,6 +217,9 @@ export default function App() {
 
   // Activity Form State
   const [activityData, setActivityData] = useState<Partial<VisitLog>>(INITIAL_ACTIVITY_DATA);
+  const [accompaniedCount, setAccompaniedCount] = useState(0);
+  const [accompaniedEmployees, setAccompaniedEmployees] = useState<string[]>([]);
+  const [isSubmittingExpense, setIsSubmittingExpense] = useState(false);
 
   // User Creation State
   const [newUserData, setNewUserData] = useState({ username: '', role: 'user' as Role });
@@ -462,6 +464,9 @@ export default function App() {
     setIsModalOpen(false);
     setEditingLog(null);
     setActivityData(INITIAL_ACTIVITY_DATA);
+    setAccompaniedCount(0);
+    setAccompaniedEmployees([]);
+    setIsSubmittingExpense(false);
   };
 
   const handleCreateActivity = async (e: React.FormEvent) => {
@@ -476,10 +481,70 @@ export default function App() {
     const method = editingLog ? 'PUT' : 'POST';
     const url = editingLog ? `/api/logs/${editingLog.id}` : '/api/logs';
     
+    // Prepare payload
+    const allUserIds = [user?.id, ...accompaniedEmployees.filter(id => id)].filter(Boolean) as string[];
+    const payload: any = { 
+      ...activityData, 
+      user_id: user?.id,
+      user_ids: allUserIds
+    };
+    
+    if (!editingLog) {
+      // For new logs, set up initial expenses
+      payload.expenses = {
+        [user?.id as string]: {
+          travel_cost: activityData.expenses?.[user?.id as string]?.travel_cost || 0,
+          lodging_cost: activityData.expenses?.[user?.id as string]?.lodging_cost || 0,
+          misc_expense: activityData.expenses?.[user?.id as string]?.misc_expense || 0,
+          status: 'submitted',
+          submitted_at: new Date().toISOString()
+        }
+      };
+      // Initialize others as pending
+      allUserIds.forEach(uid => {
+        if (uid !== user?.id) {
+          payload.expenses[uid] = {
+            travel_cost: 0,
+            lodging_cost: 0,
+            misc_expense: 0,
+            status: 'pending'
+          };
+        }
+      });
+    } else {
+      // For editing, preserve existing expenses and add new ones as pending
+      const existingExpenses = editingLog.expenses || {};
+      const updatedExpenses = { ...existingExpenses };
+      
+      // Update current user's expense from form
+      updatedExpenses[user?.id as string] = {
+        ...(existingExpenses[user?.id as string] || { status: 'submitted' }),
+        travel_cost: activityData.expenses?.[user?.id as string]?.travel_cost || 0,
+        lodging_cost: activityData.expenses?.[user?.id as string]?.lodging_cost || 0,
+        misc_expense: activityData.expenses?.[user?.id as string]?.misc_expense || 0,
+        status: 'submitted',
+        submitted_at: existingExpenses[user?.id as string]?.submitted_at || new Date().toISOString()
+      };
+
+      // Ensure all current user_ids have an expense entry
+      allUserIds.forEach(uid => {
+        if (!updatedExpenses[uid]) {
+          updatedExpenses[uid] = {
+            travel_cost: 0,
+            lodging_cost: 0,
+            misc_expense: 0,
+            status: 'pending'
+          };
+        }
+      });
+      
+      payload.expenses = updatedExpenses;
+    }
+
     const res = await fetch(url, {
       method,
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...activityData, user_id: user?.id })
+      body: JSON.stringify(payload)
     });
 
     if (res.ok) {
@@ -496,6 +561,23 @@ export default function App() {
       setDeletingLog(null);
       fetchData();
       showToast('Log deleted successfully');
+    }
+  };
+
+  const handleSubmitOwnExpense = async (logId: string, expense: any) => {
+    const res = await fetch(`/api/logs/${logId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        current_user_id: user?.id,
+        current_user_expense: expense
+      })
+    });
+
+    if (res.ok) {
+      closeVisitModal();
+      fetchData();
+      showToast('Expense submitted successfully');
     }
   };
 
@@ -560,11 +642,77 @@ export default function App() {
     }
   };
 
+  const getLogExpense = (log: VisitLog, type: 'travel' | 'lodging' | 'misc' | 'total') => {
+    if (!log.expenses) {
+      // Fallback for old logs
+      if (user?.role === 'admin' || log.user_id === user?.id) {
+        if (type === 'total') return ((log as any).travel_cost || 0) + ((log as any).lodging_cost || 0) + ((log as any).misc_expense || 0);
+        return (log as any)[type === 'travel' ? 'travel_cost' : type === 'lodging' ? 'lodging_cost' : 'misc_expense'] || 0;
+      }
+      return 0;
+    }
+    
+    if (user?.role === 'admin') {
+      const submittedExpenses = Object.values(log.expenses).filter((e: any) => e.status === 'submitted');
+      if (type === 'total') {
+        return submittedExpenses.reduce((sum, e: any) => sum + (e.travel_cost || 0) + (e.lodging_cost || 0) + (e.misc_expense || 0), 0);
+      }
+      const field = type === 'travel' ? 'travel_cost' : type === 'lodging' ? 'lodging_cost' : 'misc_expense';
+      return submittedExpenses.reduce((sum, e: any) => sum + (e[field] || 0), 0);
+    } else {
+      const exp = log.expenses[user?.id as string];
+      if (!exp || exp.status !== 'submitted') return 0;
+      if (type === 'total') return (exp.travel_cost || 0) + (exp.lodging_cost || 0) + (exp.misc_expense || 0);
+      const field = type === 'travel' ? 'travel_cost' : type === 'lodging' ? 'lodging_cost' : 'misc_expense';
+      return exp[field] || 0;
+    }
+  };
+
+  const dashboardStats = useMemo(() => {
+    const total_visits = filteredLogs.length;
+    const uniqueClients = new Set(filteredLogs.map(l => l.client_id || l.client_name));
+    const total_clients = uniqueClients.size;
+    
+    let total_days = 0;
+    let total_installations = 0;
+    let total_enrolled = 0;
+    let total_attended = 0;
+    let total_expense = 0;
+
+    filteredLogs.forEach(log => {
+      const start = new Date(log.date_from);
+      const end = new Date(log.date_to);
+      const durationInHours = (end.getTime() - start.getTime()) / (1000 * 60 * 60);
+      const days = Math.max(0.5, Math.ceil(durationInHours / 12) * 0.5);
+      
+      total_days += days;
+      total_installations += (log.systems_installed || 0);
+      total_enrolled += (log.students_enrolled || 0);
+      total_attended += (log.students_attended || 0);
+
+      // Expense calculation using getLogExpense helper logic
+      total_expense += getLogExpense(log, 'total');
+    });
+
+    const successRate = total_enrolled > 0 ? (total_attended / total_enrolled) * 100 : 0;
+
+    return {
+      total_visits,
+      total_clients,
+      total_days,
+      total_installations,
+      total_enrolled,
+      total_attended,
+      success_rate: parseFloat(successRate.toFixed(2)),
+      total_expense
+    };
+  }, [filteredLogs, user]);
+
   const exportToExcel = () => {
     const data = filteredLogs.map(log => ({
       'Client Name': log.client_name,
       'Location': log.location_name,
-      'Employee': log.user_name,
+      'Employees': log.user_names?.join(', ') || log.user_name,
       'Date From': log.date_from,
       'Date To': log.date_to,
       'Purpose': log.purpose,
@@ -572,10 +720,10 @@ export default function App() {
       'Systems Installed': log.systems_installed,
       'Students Enrolled': log.students_enrolled,
       'Students Attended': log.students_attended,
-      'Travel Cost': log.travel_cost,
-      'Lodging Cost': log.lodging_cost,
-      'Misc Expense': log.misc_expense,
-      'Total Cost': log.travel_cost + log.lodging_cost + log.misc_expense,
+      'Travel Cost': getLogExpense(log, 'travel'),
+      'Lodging Cost': getLogExpense(log, 'lodging'),
+      'Misc Expense': getLogExpense(log, 'misc'),
+      'Total Cost': getLogExpense(log, 'total'),
       'Remarks': log.remarks
     }));
 
@@ -589,7 +737,7 @@ export default function App() {
     const data = filteredLogs.map(log => ({
       'Client Name': log.client_name,
       'Location': log.location_name,
-      'Employee': log.user_name,
+      'Employees': log.user_names?.join(', ') || log.user_name,
       'Date From': log.date_from,
       'Date To': log.date_to,
       'Purpose': log.purpose,
@@ -597,10 +745,10 @@ export default function App() {
       'Systems Installed': log.systems_installed,
       'Students Enrolled': log.students_enrolled,
       'Students Attended': log.students_attended,
-      'Travel Cost': log.travel_cost,
-      'Lodging Cost': log.lodging_cost,
-      'Misc Expense': log.misc_expense,
-      'Total Cost': log.travel_cost + log.lodging_cost + log.misc_expense,
+      'Travel Cost': getLogExpense(log, 'travel'),
+      'Lodging Cost': getLogExpense(log, 'lodging'),
+      'Misc Expense': getLogExpense(log, 'misc'),
+      'Total Cost': getLogExpense(log, 'total'),
       'Remarks': log.remarks
     }));
 
@@ -622,7 +770,7 @@ export default function App() {
     const tableData = filteredLogs.map(log => [
       log.client_name,
       log.location_name,
-      log.user_name,
+      log.user_names?.join(', ') || log.user_name,
       log.date_from,
       log.date_to,
       log.purpose,
@@ -630,21 +778,21 @@ export default function App() {
       log.systems_installed,
       log.students_enrolled,
       log.students_attended,
-      log.travel_cost,
-      log.lodging_cost,
-      log.misc_expense,
-      (log.travel_cost + log.lodging_cost + log.misc_expense).toFixed(2),
+      getLogExpense(log, 'travel'),
+      getLogExpense(log, 'lodging'),
+      getLogExpense(log, 'misc'),
+      getLogExpense(log, 'total').toFixed(2),
       log.remarks
     ]);
 
     autoTable(doc, {
-      head: [['Client', 'Location', 'Employee', 'From', 'To', 'Purpose', 'Escalation', 'Systems', 'Enrolled', 'Attended', 'Travel', 'Lodging', 'Misc', 'Total', 'Remarks']],
+      head: [['Client', 'Location', 'Employees', 'From', 'To', 'Purpose', 'Escalation', 'Systems', 'Enrolled', 'Attended', 'Travel', 'Lodging', 'Misc', 'Total', 'Remarks']],
       body: tableData,
       startY: 20,
       styles: { fontSize: 6, cellPadding: 1 },
       headStyles: { fillColor: [79, 70, 229] },
       columnStyles: {
-        13: { cellWidth: 30 } // Remarks column width
+        14: { cellWidth: 30 } // Remarks column width
       }
     });
 
@@ -962,7 +1110,7 @@ export default function App() {
                   </div>
                   <div className="flex-1">
                     <p className="text-sm text-gray-500 font-medium tracking-tight">Total Visits</p>
-                    <p className="text-2xl font-bold text-gray-900">{stats.total_visits}</p>
+                    <p className="text-2xl font-bold text-gray-900">{dashboardStats.total_visits}</p>
                   </div>
                   <button 
                     onClick={() => setShowDetailedVisits(!showDetailedVisits)}
@@ -978,7 +1126,7 @@ export default function App() {
                   </div>
                   <div className="flex-1">
                     <p className="text-sm text-gray-500 font-medium tracking-tight">Unique Clients</p>
-                    <p className="text-2xl font-bold text-gray-900">{stats.total_clients}</p>
+                    <p className="text-2xl font-bold text-gray-900">{dashboardStats.total_clients}</p>
                   </div>
                 </Card>
                 <Card className="flex items-center gap-4 h-full hover:shadow-md hover:-translate-y-1 transition-all duration-300 border-amber-100/50">
@@ -987,7 +1135,7 @@ export default function App() {
                   </div>
                   <div className="flex-1">
                     <p className="text-sm text-gray-500 font-medium tracking-tight">Days Spent</p>
-                    <p className="text-2xl font-bold text-gray-900">{stats.total_days}</p>
+                    <p className="text-2xl font-bold text-gray-900">{dashboardStats.total_days}</p>
                   </div>
                 </Card>
                 <Card className="flex items-center gap-4 h-full hover:shadow-md hover:-translate-y-1 transition-all duration-300 border-violet-100/50">
@@ -996,7 +1144,7 @@ export default function App() {
                   </div>
                   <div className="flex-1">
                     <p className="text-sm text-gray-500 font-medium tracking-tight">Total Installations</p>
-                    <p className="text-2xl font-bold text-gray-900">{stats.total_installations}</p>
+                    <p className="text-2xl font-bold text-gray-900">{dashboardStats.total_installations}</p>
                   </div>
                 </Card>
                 <Card className="flex items-center gap-4 h-full hover:shadow-md hover:-translate-y-1 transition-all duration-300 border-orange-100/50">
@@ -1006,9 +1154,9 @@ export default function App() {
                   <div className="flex-1">
                     <p className="text-sm text-gray-500 font-medium tracking-tight">Success Rate</p>
                     <p className="text-2xl font-bold text-gray-900">
-                      {stats.success_rate}%
+                      {dashboardStats.success_rate}%
                       <span className="text-xs text-gray-400 ml-2 font-normal">
-                        ({stats.total_attended}/{stats.total_enrolled})
+                        ({dashboardStats.total_attended}/{dashboardStats.total_enrolled})
                       </span>
                     </p>
                   </div>
@@ -1019,7 +1167,7 @@ export default function App() {
                   </div>
                   <div className="flex-1">
                     <p className="text-sm text-gray-500 font-medium tracking-tight">Total Expense</p>
-                    <p className="text-2xl font-bold text-gray-900">₹{(stats.total_expense || 0).toLocaleString()}</p>
+                    <p className="text-2xl font-bold text-gray-900">₹{(dashboardStats.total_expense || 0).toLocaleString()}</p>
                   </div>
                 </Card>
               </div>
@@ -1037,7 +1185,7 @@ export default function App() {
                     <div className="pt-4 space-y-4">
                       <h3 className="text-lg font-bold text-gray-900">Recent Visit Details</h3>
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                        {logs.slice(0, 6).map(log => (
+                        {filteredLogs.slice(0, 6).map(log => (
                           <Card key={`detail-${log.id}`} className="p-4 flex items-center gap-4 hover:border-indigo-100 transition-colors">
                             <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${
                               log.purpose === 'Installation' ? 'bg-blue-50 text-blue-600' : 
@@ -1056,7 +1204,7 @@ export default function App() {
                               <p className="text-[10px] text-gray-400 mb-1">{log.date_from.split('T')[0]}</p>
                               <div className="flex justify-between items-center text-[11px]">
                                 <span className="text-indigo-600 font-medium truncate max-w-[100px]">{log.user_name}</span>
-                                <span className="font-bold text-gray-700">₹{(log.travel_cost + log.lodging_cost + log.misc_expense).toFixed(0)}</span>
+                                <span className="font-bold text-gray-700">₹{getLogExpense(log, 'total').toFixed(0)}</span>
                               </div>
                             </div>
                           </Card>
@@ -1120,7 +1268,7 @@ export default function App() {
                             <td className="px-4 py-3 sticky left-0 bg-white group-hover:bg-gray-50/50 z-10 border-r border-black/5">
                               <p className="text-sm font-bold text-gray-900 whitespace-nowrap">{log.client_name}</p>
                             </td>
-                            <td className="px-4 py-3 text-xs text-indigo-600 font-medium whitespace-nowrap">{log.user_name}</td>
+                            <td className="px-4 py-3 text-xs text-indigo-600 font-medium whitespace-nowrap">{log.user_names?.join(', ') || log.user_name}</td>
                             <td className="px-4 py-3 text-xs text-gray-600 whitespace-nowrap">{log.location_name}</td>
                             <td className="px-4 py-3 whitespace-nowrap">
                               <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-tighter ${
@@ -1145,11 +1293,11 @@ export default function App() {
                             <td className="px-4 py-3 text-xs text-gray-600 whitespace-nowrap">
                               {log.students_enrolled ? `${log.students_attended}/${log.students_enrolled}` : '-'}
                             </td>
-                            <td className="px-4 py-3 text-xs text-gray-600">₹{log.travel_cost.toLocaleString()}</td>
-                            <td className="px-4 py-3 text-xs text-gray-600">₹{log.lodging_cost.toLocaleString()}</td>
-                            <td className="px-4 py-3 text-xs text-gray-600">₹{log.misc_expense.toLocaleString()}</td>
+                            <td className="px-4 py-3 text-xs text-gray-600">₹{getLogExpense(log, 'travel').toLocaleString()}</td>
+                            <td className="px-4 py-3 text-xs text-gray-600">₹{getLogExpense(log, 'lodging').toLocaleString()}</td>
+                            <td className="px-4 py-3 text-xs text-gray-600">₹{getLogExpense(log, 'misc').toLocaleString()}</td>
                             <td className="px-4 py-3 text-sm font-bold text-gray-900 text-right whitespace-nowrap">
-                              ₹{(log.travel_cost + log.lodging_cost + log.misc_expense).toLocaleString()}
+                              ₹{getLogExpense(log, 'total').toLocaleString()}
                             </td>
                             <td className="px-4 py-3 text-xs text-gray-500 max-w-xs truncate" title={log.remarks}>
                               {log.remarks || '-'}
@@ -1307,9 +1455,55 @@ export default function App() {
                     />
                   </div>
 
+                  {/* Accompanied Employees Section */}
                   <div className="border-t border-black/5 pt-6">
                     <h4 className="text-sm font-bold text-gray-900 mb-4 flex items-center gap-2">
-                      <IndianRupee size={16} /> Expenses
+                      <Users size={16} /> Accompanied Employees
+                    </h4>
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-xs font-semibold text-gray-500 mb-1">Number of Employees (0-5)</label>
+                        <Select 
+                          value={String(accompaniedCount)}
+                          onChange={e => {
+                            const count = parseInt(e.target.value);
+                            setAccompaniedCount(count);
+                            setAccompaniedEmployees(prev => {
+                              const next = [...prev];
+                              if (count < next.length) return next.slice(0, count);
+                              while (next.length < count) next.push('');
+                              return next;
+                            });
+                          }}
+                        >
+                          {[0,1,2,3,4,5].map(n => <option key={n} value={n}>{n}</option>)}
+                        </Select>
+                      </div>
+                      {Array.from({ length: accompaniedCount }).map((_, i) => (
+                        <div key={i}>
+                          <label className="block text-xs font-semibold text-gray-500 mb-1">Employee {i + 1}</label>
+                          <Select 
+                            required
+                            value={accompaniedEmployees[i] || ''}
+                            onChange={e => {
+                              const newEmployees = [...accompaniedEmployees];
+                              newEmployees[i] = e.target.value;
+                              setAccompaniedEmployees(newEmployees);
+                            }}
+                          >
+                            <option value="">Select Employee...</option>
+                            {allUsers.filter(u => u.id !== user?.id && (!accompaniedEmployees.includes(u.id) || accompaniedEmployees[i] === u.id)).map(u => (
+                              <option key={u.id} value={u.id}>{u.name}</option>
+                            ))}
+                          </Select>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="border-t border-black/5 pt-6">
+                    <h4 className="text-sm font-bold text-gray-900 mb-4 flex items-center gap-2">
+                      <IndianRupee size={16} /> Your Expenses
                     </h4>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                       <div>
@@ -1317,8 +1511,20 @@ export default function App() {
                         <Input 
                           type="number" 
                           min={0}
-                          value={String(activityData.travel_cost || 0)}
-                          onChange={e => setActivityData({ ...activityData, travel_cost: Math.max(0, parseFloat(e.target.value) || 0) })}
+                          value={String(activityData.expenses?.[user!.id]?.travel_cost || 0)}
+                          onChange={e => {
+                            const val = Math.max(0, parseFloat(e.target.value) || 0);
+                            setActivityData({
+                              ...activityData,
+                              expenses: {
+                                ...activityData.expenses,
+                                [user!.id]: {
+                                  ...(activityData.expenses?.[user!.id] || { status: 'pending' }),
+                                  travel_cost: val
+                                }
+                              }
+                            });
+                          }}
                         />
                       </div>
                       <div>
@@ -1326,8 +1532,20 @@ export default function App() {
                         <Input 
                           type="number" 
                           min={0}
-                          value={String(activityData.lodging_cost || 0)}
-                          onChange={e => setActivityData({ ...activityData, lodging_cost: Math.max(0, parseFloat(e.target.value) || 0) })}
+                          value={String(activityData.expenses?.[user!.id]?.lodging_cost || 0)}
+                          onChange={e => {
+                            const val = Math.max(0, parseFloat(e.target.value) || 0);
+                            setActivityData({
+                              ...activityData,
+                              expenses: {
+                                ...activityData.expenses,
+                                [user!.id]: {
+                                  ...(activityData.expenses?.[user!.id] || { status: 'pending' }),
+                                  lodging_cost: val
+                                }
+                              }
+                            });
+                          }}
                         />
                       </div>
                       <div>
@@ -1335,8 +1553,20 @@ export default function App() {
                         <Input 
                           type="number" 
                           min={0}
-                          value={String(activityData.misc_expense || 0)}
-                          onChange={e => setActivityData({ ...activityData, misc_expense: Math.max(0, parseFloat(e.target.value) || 0) })}
+                          value={String(activityData.expenses?.[user!.id]?.misc_expense || 0)}
+                          onChange={e => {
+                            const val = Math.max(0, parseFloat(e.target.value) || 0);
+                            setActivityData({
+                              ...activityData,
+                              expenses: {
+                                ...activityData.expenses,
+                                [user!.id]: {
+                                  ...(activityData.expenses?.[user!.id] || { status: 'pending' }),
+                                  misc_expense: val
+                                }
+                              }
+                            });
+                          }}
                         />
                       </div>
                     </div>
@@ -1492,21 +1722,21 @@ export default function App() {
                         <div className="text-right">
                           <p className="text-xs text-gray-400 uppercase font-bold tracking-wider">Total Expense</p>
                           <p className="text-lg font-bold text-gray-900">
-                            ₹{(log.travel_cost + log.lodging_cost + log.misc_expense).toFixed(2)}
+                            ₹{getLogExpense(log, 'total').toFixed(2)}
                           </p>
                         </div>
                         <div className="flex items-center gap-2">
                           <button 
                             onClick={() => {
                               setEditingLog(log);
+                              const otherUserIds = (log.user_ids || []).filter(id => id !== user?.id);
+                              setAccompaniedCount(otherUserIds.length);
+                              setAccompaniedEmployees(otherUserIds);
                               setActivityData({
                                 ...log,
                                 systems_installed: log.systems_installed ?? 0,
                                 students_enrolled: log.students_enrolled ?? 0,
                                 students_attended: log.students_attended ?? 0,
-                                travel_cost: log.travel_cost ?? 0,
-                                lodging_cost: log.lodging_cost ?? 0,
-                                misc_expense: log.misc_expense ?? 0,
                               });
                               setIsModalOpen(true);
                             }}
@@ -1554,6 +1784,81 @@ export default function App() {
                       <div className="md:col-span-2">
                         <p className="text-gray-400 font-medium uppercase text-[10px] tracking-wider">Remarks</p>
                         <p className="text-gray-700 mt-1 italic">"{log.remarks || 'No remarks provided'}"</p>
+                      </div>
+                      <div className="md:col-span-5 pt-2 flex flex-wrap gap-2">
+                        {log.user_names?.map((name, i) => (
+                          <span key={i} className="text-[10px] px-2 py-0.5 bg-indigo-50 text-indigo-600 rounded-full font-medium">
+                            {name}
+                          </span>
+                        ))}
+                      </div>
+                      
+                      {/* Expense Status for Current User */}
+                      <div className="md:col-span-5 pt-4 border-t border-black/5">
+                        {user.role === 'admin' ? (
+                          <div className="space-y-2">
+                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">All Employee Expenses</p>
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                              {log.user_ids?.map((uid, i) => {
+                                const exp = log.expenses?.[uid];
+                                const name = log.user_names?.[i] || 'Unknown';
+                                return (
+                                  <div key={uid} className="p-2 bg-gray-50 rounded-lg border border-black/5">
+                                    <div className="flex justify-between items-center mb-1">
+                                      <span className="text-xs font-bold text-gray-700">{name}</span>
+                                      <span className={`text-[9px] px-1.5 py-0.5 rounded uppercase font-bold ${exp?.status === 'submitted' ? 'bg-emerald-100 text-emerald-700' : 'bg-orange-100 text-orange-700'}`}>
+                                        {exp?.status || 'Pending'}
+                                      </span>
+                                    </div>
+                                    {exp?.status === 'submitted' ? (
+                                      <p className="text-xs font-bold text-indigo-600">₹{(exp.travel_cost + exp.lodging_cost + exp.misc_expense).toFixed(0)}</p>
+                                    ) : (
+                                      <p className="text-xs text-gray-400 italic">No expense added</p>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Your Expense Status</p>
+                              <div className="flex items-center gap-2 mt-1">
+                                <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider ${log.expenses?.[user.id]?.status === 'submitted' ? 'bg-emerald-50 text-emerald-600' : 'bg-orange-50 text-orange-600'}`}>
+                                  {log.expenses?.[user.id]?.status === 'submitted' ? 'Submitted' : 'Pending Expense'}
+                                </span>
+                                {log.expenses?.[user.id]?.status === 'submitted' && (
+                                  <span className="text-sm font-bold text-gray-900">₹{(log.expenses[user.id].travel_cost + log.expenses[user.id].lodging_cost + log.expenses[user.id].misc_expense).toFixed(0)}</span>
+                                )}
+                              </div>
+                            </div>
+                            {log.expenses?.[user.id]?.status !== 'submitted' && (
+                              <Button 
+                                size="sm" 
+                                className="text-xs py-1 px-3"
+                                onClick={() => {
+                                  setEditingLog(log);
+                                  setIsSubmittingExpense(true);
+                                  setActivityData({
+                                    ...log,
+                                    expenses: {
+                                      [user.id]: {
+                                        travel_cost: 0,
+                                        lodging_cost: 0,
+                                        misc_expense: 0,
+                                        status: 'pending'
+                                      }
+                                    }
+                                  });
+                                  setIsModalOpen(true);
+                                }}
+                              >
+                                Add Expense
+                              </Button>
+                            )}
+                          </div>
+                        )}
                       </div>
                     </div>
                   </Card>
@@ -1775,139 +2080,197 @@ export default function App() {
             >
               <div className="p-6 border-b border-black/5 flex justify-between items-center">
                 <h3 className="text-xl font-bold text-gray-900">
-                  {editingLog ? 'Edit Visit Log' : 'Create New Visit Log'}
+                  {isSubmittingExpense ? 'Add Your Expenses' : (editingLog ? 'Edit Visit Log' : 'Create New Visit Log')}
                 </h3>
                 <button onClick={closeVisitModal} className="text-gray-400 hover:text-gray-600">
                   <X size={24} />
                 </button>
               </div>
               <div className="p-6 max-h-[80vh] overflow-y-auto">
-                <form onSubmit={handleCreateActivity} className="space-y-6">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-2">Client Name</label>
-                      <Select 
-                        required
-                        value={activityData.client_id}
-                        onChange={e => setActivityData({ ...activityData, client_id: e.target.value })}
-                      >
-                        <option value="">Select Client...</option>
-                        {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                      </Select>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-2">Location</label>
-                      <Select 
-                        required
-                        value={activityData.location_id}
-                        onChange={e => setActivityData({ ...activityData, location_id: e.target.value })}
-                      >
-                        <option value="">Select Location...</option>
-                        {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
-                      </Select>
-                    </div>
-                  </div>
+                <form 
+                  onSubmit={isSubmittingExpense ? (e) => {
+                    e.preventDefault();
+                    handleSubmitOwnExpense(editingLog!.id, activityData.expenses?.[user!.id]);
+                  } : handleCreateActivity} 
+                  className="space-y-6"
+                >
+                  {!isSubmittingExpense && (
+                    <>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-semibold text-gray-700 mb-2">Client Name</label>
+                          <Select 
+                            required
+                            value={activityData.client_id}
+                            onChange={e => setActivityData({ ...activityData, client_id: e.target.value })}
+                          >
+                            <option value="">Select Client...</option>
+                            {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                          </Select>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-semibold text-gray-700 mb-2">Location</label>
+                          <Select 
+                            required
+                            value={activityData.location_id}
+                            onChange={e => setActivityData({ ...activityData, location_id: e.target.value })}
+                          >
+                            <option value="">Select Location...</option>
+                            {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+                          </Select>
+                        </div>
+                      </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-2">Purpose</label>
-                      <Select 
-                        value={activityData.purpose}
-                        onChange={e => setActivityData({ ...activityData, purpose: e.target.value as any })}
-                      >
-                        <option value="Installation">Installation</option>
-                        <option value="Exam Support">Exam Support</option>
-                        <option value="Exam Support & Installation">Exam Support & Installation</option>
-                      </Select>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-2">Escalation Level</label>
-                      <Select 
-                        value={activityData.escalation_level}
-                        onChange={e => setActivityData({ ...activityData, escalation_level: e.target.value as any })}
-                        className={
-                          activityData.escalation_level === 'High' ? 'text-red-600 font-bold border-red-200 bg-red-50' : 
-                          activityData.escalation_level === 'Medium' ? 'text-orange-600 font-bold border-orange-200 bg-orange-50' : 
-                          activityData.escalation_level === 'Low' ? 'text-yellow-600 font-bold border-yellow-200 bg-yellow-50' : ''
-                        }
-                      >
-                        <option value="No" className="text-gray-600">No</option>
-                        <option value="Low" className="text-yellow-600 font-bold">Low</option>
-                        <option value="Medium" className="text-orange-600 font-bold">Medium</option>
-                        <option value="High" className="text-red-600 font-bold">High</option>
-                      </Select>
-                    </div>
-                  </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-semibold text-gray-700 mb-2">Purpose</label>
+                          <Select 
+                            value={activityData.purpose}
+                            onChange={e => setActivityData({ ...activityData, purpose: e.target.value as any })}
+                          >
+                            <option value="Installation">Installation</option>
+                            <option value="Exam Support">Exam Support</option>
+                            <option value="Exam Support & Installation">Exam Support & Installation</option>
+                          </Select>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-semibold text-gray-700 mb-2">Escalation Level</label>
+                          <Select 
+                            value={activityData.escalation_level}
+                            onChange={e => setActivityData({ ...activityData, escalation_level: e.target.value as any })}
+                            className={
+                              activityData.escalation_level === 'High' ? 'text-red-600 font-bold border-red-200 bg-red-50' : 
+                              activityData.escalation_level === 'Medium' ? 'text-orange-600 font-bold border-orange-200 bg-orange-50' : 
+                              activityData.escalation_level === 'Low' ? 'text-yellow-600 font-bold border-yellow-200 bg-yellow-50' : ''
+                            }
+                          >
+                            <option value="No" className="text-gray-600">No</option>
+                            <option value="Low" className="text-yellow-600 font-bold">Low</option>
+                            <option value="Medium" className="text-orange-600 font-bold">Medium</option>
+                            <option value="High" className="text-red-600 font-bold">High</option>
+                          </Select>
+                        </div>
+                      </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-2">From Date & Time</label>
-                      <Input 
-                        type="datetime-local" 
-                        required
-                        value={activityData.date_from}
-                        onChange={e => setActivityData({ ...activityData, date_from: e.target.value })}
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-2">To Date & Time</label>
-                      <Input 
-                        type="datetime-local" 
-                        required
-                        value={activityData.date_to}
-                        min={activityData.date_from}
-                        onChange={e => setActivityData({ ...activityData, date_to: e.target.value })}
-                      />
-                    </div>
-                  </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-semibold text-gray-700 mb-2">From Date & Time</label>
+                          <Input 
+                            type="datetime-local" 
+                            required
+                            value={activityData.date_from}
+                            onChange={e => setActivityData({ ...activityData, date_from: e.target.value })}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-semibold text-gray-700 mb-2">To Date & Time</label>
+                          <Input 
+                            type="datetime-local" 
+                            required
+                            value={activityData.date_to}
+                            min={activityData.date_from}
+                            onChange={e => setActivityData({ ...activityData, date_to: e.target.value })}
+                          />
+                        </div>
+                      </div>
 
-                  {(activityData.purpose === 'Installation' || activityData.purpose === 'Exam Support & Installation') && (
-                    <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-2">Number of Systems Installed</label>
-                      <Input 
-                        type="number" 
-                        min={0}
-                        value={String(activityData.systems_installed || 0)}
-                        onChange={e => setActivityData({ ...activityData, systems_installed: Math.max(0, parseInt(e.target.value) || 0) })}
-                      />
-                    </div>
-                  )}
+                      {(activityData.purpose === 'Installation' || activityData.purpose === 'Exam Support & Installation') && (
+                        <div>
+                          <label className="block text-sm font-semibold text-gray-700 mb-2">Number of Systems Installed</label>
+                          <Input 
+                            type="number" 
+                            min={0}
+                            value={String(activityData.systems_installed || 0)}
+                            onChange={e => setActivityData({ ...activityData, systems_installed: Math.max(0, parseInt(e.target.value) || 0) })}
+                          />
+                        </div>
+                      )}
 
-                  {(activityData.purpose === 'Exam Support' || activityData.purpose === 'Exam Support & Installation') && (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {(activityData.purpose === 'Exam Support' || activityData.purpose === 'Exam Support & Installation') && (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-sm font-semibold text-gray-700 mb-2">Students Enrolled</label>
+                            <Input 
+                              type="number" 
+                              min={0}
+                              value={String(activityData.students_enrolled || 0)}
+                              onChange={e => setActivityData({ ...activityData, students_enrolled: Math.max(0, parseInt(e.target.value) || 0) })}
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-semibold text-gray-700 mb-2">Students Attended</label>
+                            <Input 
+                              type="number" 
+                              min={0}
+                              value={String(activityData.students_attended || 0)}
+                              onChange={e => setActivityData({ ...activityData, students_attended: Math.max(0, parseInt(e.target.value) || 0) })}
+                            />
+                          </div>
+                        </div>
+                      )}
+
                       <div>
-                        <label className="block text-sm font-semibold text-gray-700 mb-2">Students Enrolled</label>
-                        <Input 
-                          type="number" 
-                          min={0}
-                          value={String(activityData.students_enrolled || 0)}
-                          onChange={e => setActivityData({ ...activityData, students_enrolled: Math.max(0, parseInt(e.target.value) || 0) })}
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">Remarks</label>
+                        <textarea 
+                          className="w-full px-4 py-2 rounded-xl border border-black/10 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all min-h-[100px]"
+                          value={activityData.remarks}
+                          onChange={e => setActivityData({ ...activityData, remarks: e.target.value })}
                         />
                       </div>
-                      <div>
-                        <label className="block text-sm font-semibold text-gray-700 mb-2">Students Attended</label>
-                        <Input 
-                          type="number" 
-                          min={0}
-                          value={String(activityData.students_attended || 0)}
-                          onChange={e => setActivityData({ ...activityData, students_attended: Math.max(0, parseInt(e.target.value) || 0) })}
-                        />
-                      </div>
-                    </div>
-                  )}
 
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">Remarks</label>
-                    <textarea 
-                      className="w-full px-4 py-2 rounded-xl border border-black/10 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all min-h-[100px]"
-                      value={activityData.remarks}
-                      onChange={e => setActivityData({ ...activityData, remarks: e.target.value })}
-                    />
-                  </div>
+                      {/* Accompanied Employees Section */}
+                      {!editingLog && (
+                        <div className="border-t border-black/5 pt-6">
+                          <h4 className="text-sm font-bold text-gray-900 mb-4 flex items-center gap-2">
+                            <Users size={16} /> Accompanied Employees
+                          </h4>
+                          <div className="space-y-4">
+                            <div>
+                              <label className="block text-xs font-semibold text-gray-500 mb-1">Number of Employees (0-5)</label>
+                              <Select 
+                                value={String(accompaniedCount)}
+                                onChange={e => {
+                                  const count = parseInt(e.target.value);
+                                  setAccompaniedCount(count);
+                                  setAccompaniedEmployees(prev => {
+                                    const next = [...prev];
+                                    if (count < next.length) return next.slice(0, count);
+                                    while (next.length < count) next.push('');
+                                    return next;
+                                  });
+                                }}
+                              >
+                                {[0,1,2,3,4,5].map(n => <option key={n} value={n}>{n}</option>)}
+                              </Select>
+                            </div>
+                            {Array.from({ length: accompaniedCount }).map((_, i) => (
+                              <div key={i}>
+                                <label className="block text-xs font-semibold text-gray-500 mb-1">Employee {i + 1}</label>
+                                <Select 
+                                  required
+                                  value={accompaniedEmployees[i] || ''}
+                                  onChange={e => {
+                                    const newEmployees = [...accompaniedEmployees];
+                                    newEmployees[i] = e.target.value;
+                                    setAccompaniedEmployees(newEmployees);
+                                  }}
+                                >
+                                  <option value="">Select Employee...</option>
+                                  {allUsers.filter(u => u.id !== user?.id && (!accompaniedEmployees.includes(u.id) || accompaniedEmployees[i] === u.id)).map(u => (
+                                    <option key={u.id} value={u.id}>{u.name}</option>
+                                  ))}
+                                </Select>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )}
 
                   <div className="border-t border-black/5 pt-6">
                     <h4 className="text-sm font-bold text-gray-900 mb-4 flex items-center gap-2">
-                      <IndianRupee size={16} /> Expenses
+                      <IndianRupee size={16} /> {isSubmittingExpense ? 'Submit Your Expenses' : 'Your Expenses'}
                     </h4>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                       <div>
@@ -1915,8 +2278,20 @@ export default function App() {
                         <Input 
                           type="number" 
                           min={0}
-                          value={String(activityData.travel_cost || 0)}
-                          onChange={e => setActivityData({ ...activityData, travel_cost: Math.max(0, parseFloat(e.target.value) || 0) })}
+                          value={String(activityData.expenses?.[user!.id]?.travel_cost || 0)}
+                          onChange={e => {
+                            const val = Math.max(0, parseFloat(e.target.value) || 0);
+                            setActivityData({
+                              ...activityData,
+                              expenses: {
+                                ...activityData.expenses,
+                                [user!.id]: {
+                                  ...(activityData.expenses?.[user!.id] || { status: 'pending' }),
+                                  travel_cost: val
+                                }
+                              }
+                            });
+                          }}
                         />
                       </div>
                       <div>
@@ -1924,8 +2299,20 @@ export default function App() {
                         <Input 
                           type="number" 
                           min={0}
-                          value={String(activityData.lodging_cost || 0)}
-                          onChange={e => setActivityData({ ...activityData, lodging_cost: Math.max(0, parseFloat(e.target.value) || 0) })}
+                          value={String(activityData.expenses?.[user!.id]?.lodging_cost || 0)}
+                          onChange={e => {
+                            const val = Math.max(0, parseFloat(e.target.value) || 0);
+                            setActivityData({
+                              ...activityData,
+                              expenses: {
+                                ...activityData.expenses,
+                                [user!.id]: {
+                                  ...(activityData.expenses?.[user!.id] || { status: 'pending' }),
+                                  lodging_cost: val
+                                }
+                              }
+                            });
+                          }}
                         />
                       </div>
                       <div>
@@ -1933,8 +2320,20 @@ export default function App() {
                         <Input 
                           type="number" 
                           min={0}
-                          value={String(activityData.misc_expense || 0)}
-                          onChange={e => setActivityData({ ...activityData, misc_expense: Math.max(0, parseFloat(e.target.value) || 0) })}
+                          value={String(activityData.expenses?.[user!.id]?.misc_expense || 0)}
+                          onChange={e => {
+                            const val = Math.max(0, parseFloat(e.target.value) || 0);
+                            setActivityData({
+                              ...activityData,
+                              expenses: {
+                                ...activityData.expenses,
+                                [user!.id]: {
+                                  ...(activityData.expenses?.[user!.id] || { status: 'pending' }),
+                                  misc_expense: val
+                                }
+                              }
+                            });
+                          }}
                         />
                       </div>
                     </div>
@@ -1942,7 +2341,7 @@ export default function App() {
 
                   <div className="flex gap-3 pt-4">
                     <Button type="button" variant="secondary" className="flex-1" onClick={closeVisitModal}>Cancel</Button>
-                    <Button type="submit" className="flex-1">{editingLog ? 'Update Log' : 'Save Log'}</Button>
+                    <Button type="submit" className="flex-1">{isSubmittingExpense ? 'Submit Expense' : (editingLog ? 'Update Log' : 'Save Log')}</Button>
                   </div>
                 </form>
               </div>

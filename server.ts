@@ -481,10 +481,74 @@ async function startServer() {
 
     if (role === 'admin') {
       if (employeeId && employeeId !== 'All') {
-        query = query.where('user_id', '==', employeeId);
+        // Support both old user_id and new user_ids array
+        const snapshotById = await query.where('user_id', '==', employeeId).get();
+        const snapshotByArray = await query.where('user_ids', 'array-contains', employeeId).get();
+        
+        const combinedDocs = [...snapshotById.docs, ...snapshotByArray.docs];
+        const uniqueDocs = Array.from(new Map(combinedDocs.map(doc => [doc.id, doc])).values());
+        
+        // Fetch related names for logs
+        let logs = await Promise.all(uniqueDocs.map(async doc => {
+          const data = doc.data();
+          const [userDoc, clientDoc, locationDoc] = await Promise.all([
+            db!.collection('users').doc(data.user_id).get(),
+            data.client_id ? db!.collection('clients').doc(data.client_id).get() : Promise.resolve(null),
+            data.location_id ? db!.collection('locations').doc(data.location_id).get() : Promise.resolve(null)
+          ]);
+
+          const user_names = data.user_ids ? await Promise.all(data.user_ids.map(async (uid: string) => {
+            const uDoc = await db!.collection('users').doc(uid).get();
+            return uDoc.exists ? (uDoc.data() as any).name : 'Unknown';
+          })) : [userDoc.exists ? (userDoc.data() as any).name : 'Unknown'];
+
+          return { 
+            id: doc.id, 
+            ...data, 
+            user_name: userDoc.exists ? (userDoc.data() as any).name : 'Unknown',
+            user_names,
+            client_name: clientDoc?.exists ? (clientDoc.data() as any).name : (data.client_name || 'Unknown'),
+            location_name: locationDoc?.exists ? (locationDoc.data() as any).name : (data.location || 'Unknown')
+          };
+        }));
+
+        logs.sort((a, b) => new Date(b.date_from).getTime() - new Date(a.date_from).getTime());
+        return res.json(logs);
       }
     } else {
-      query = query.where('user_id', '==', userId);
+      // For users, we need to find logs where they are either the creator or an accompanied employee
+      const snapshotById = await query.where('user_id', '==', userId).get();
+      const snapshotByArray = await query.where('user_ids', 'array-contains', userId).get();
+      
+      const combinedDocs = [...snapshotById.docs, ...snapshotByArray.docs];
+      const uniqueDocs = Array.from(new Map(combinedDocs.map(doc => [doc.id, doc])).values());
+      
+      // Fetch related names for logs
+      let logs = await Promise.all(uniqueDocs.map(async doc => {
+        const data = doc.data();
+        const [userDoc, clientDoc, locationDoc] = await Promise.all([
+          db!.collection('users').doc(data.user_id).get(),
+          data.client_id ? db!.collection('clients').doc(data.client_id).get() : Promise.resolve(null),
+          data.location_id ? db!.collection('locations').doc(data.location_id).get() : Promise.resolve(null)
+        ]);
+
+        const user_names = data.user_ids ? await Promise.all(data.user_ids.map(async (uid: string) => {
+          const uDoc = await db!.collection('users').doc(uid).get();
+          return uDoc.exists ? (uDoc.data() as any).name : 'Unknown';
+        })) : [userDoc.exists ? (userDoc.data() as any).name : 'Unknown'];
+
+        return { 
+          id: doc.id, 
+          ...data, 
+          user_name: userDoc.exists ? (userDoc.data() as any).name : 'Unknown',
+          user_names,
+          client_name: clientDoc?.exists ? (clientDoc.data() as any).name : (data.client_name || 'Unknown'),
+          location_name: locationDoc?.exists ? (locationDoc.data() as any).name : (data.location || 'Unknown')
+        };
+      }));
+
+      logs.sort((a, b) => new Date(b.date_from).getTime() - new Date(a.date_from).getTime());
+      return res.json(logs);
     }
 
     const snapshot = await query.get();
@@ -498,10 +562,16 @@ async function startServer() {
         data.location_id ? db!.collection('locations').doc(data.location_id).get() : Promise.resolve(null)
       ]);
 
+      const user_names = data.user_ids ? await Promise.all(data.user_ids.map(async (uid: string) => {
+        const uDoc = await db!.collection('users').doc(uid).get();
+        return uDoc.exists ? (uDoc.data() as any).name : 'Unknown';
+      })) : [userDoc.exists ? (userDoc.data() as any).name : 'Unknown'];
+
       return { 
         id: doc.id, 
         ...data, 
         user_name: userDoc.exists ? (userDoc.data() as any).name : 'Unknown',
+        user_names,
         client_name: clientDoc?.exists ? (clientDoc.data() as any).name : (data.client_name || 'Unknown'),
         location_name: locationDoc?.exists ? (locationDoc.data() as any).name : (data.location || 'Unknown')
       };
@@ -514,9 +584,28 @@ async function startServer() {
 
   app.post("/api/logs", async (req, res) => {
     if (!db) return res.status(500).json({ error: "Database not connected" });
-    const logData = req.body;
+    const { user_id, user_ids, expenses, ...logData } = req.body;
+    
+    // Initialize expenses for all users if not provided
+    const finalUserIds = user_ids || [user_id];
+    const finalExpenses = expenses || {};
+    
+    finalUserIds.forEach((uid: string) => {
+      if (!finalExpenses[uid]) {
+        finalExpenses[uid] = {
+          travel_cost: 0,
+          lodging_cost: 0,
+          misc_expense: 0,
+          status: 'pending'
+        };
+      }
+    });
+
     const docRef = await db.collection('visit_logs').add({
       ...logData,
+      user_id,
+      user_ids: finalUserIds,
+      expenses: finalExpenses,
       created_at: FieldValue.serverTimestamp()
     });
     res.json({ id: docRef.id });
@@ -525,11 +614,37 @@ async function startServer() {
   app.put("/api/logs/:id", async (req, res) => {
     if (!db) return res.status(500).json({ error: "Database not connected" });
     const { id } = req.params;
-    const logData = req.body;
-    await db.collection('visit_logs').doc(id).update({
-      ...logData,
-      updated_at: FieldValue.serverTimestamp()
-    });
+    const { current_user_id, current_user_expense, ...logData } = req.body;
+    
+    const docRef = db.collection('visit_logs').doc(id);
+    const doc = await docRef.get();
+    
+    if (!doc.exists) return res.status(404).json({ error: "Log not found" });
+    
+    const existingData = doc.data() as any;
+    
+    if (current_user_id && current_user_expense) {
+      // Partial update for a specific user's expense
+      const updatedExpenses = {
+        ...existingData.expenses,
+        [current_user_id]: {
+          ...current_user_expense,
+          status: 'submitted',
+          submitted_at: new Date().toISOString()
+        }
+      };
+      await docRef.update({
+        expenses: updatedExpenses,
+        updated_at: FieldValue.serverTimestamp()
+      });
+    } else {
+      // Full update (admin or creator)
+      await docRef.update({
+        ...logData,
+        updated_at: FieldValue.serverTimestamp()
+      });
+    }
+    
     res.json({ success: true });
   });
 
@@ -544,13 +659,17 @@ async function startServer() {
     if (!db) return res.status(500).json({ error: "Database not connected" });
     const { userId, role } = req.query;
     
-    let query: any = db.collection('visit_logs');
-    if (role !== 'admin') {
-      query = query.where('user_id', '==', userId);
+    let logs: any[] = [];
+    if (role === 'admin') {
+      const snapshot = await db.collection('visit_logs').get();
+      logs = snapshot.docs.map(doc => doc.data());
+    } else {
+      const snapshotById = await db.collection('visit_logs').where('user_id', '==', userId).get();
+      const snapshotByArray = await db.collection('visit_logs').where('user_ids', 'array-contains', userId).get();
+      const combinedDocs = [...snapshotById.docs, ...snapshotByArray.docs];
+      const uniqueDocs = Array.from(new Map(combinedDocs.map(doc => [doc.id, doc])).values());
+      logs = uniqueDocs.map(doc => doc.data());
     }
-
-    const snapshot = await query.get();
-    const logs = snapshot.docs.map(doc => doc.data());
 
     const total_visits = logs.length;
     const uniqueClients = new Set(logs.map(l => l.client_id || l.client_name));
@@ -572,7 +691,31 @@ async function startServer() {
       total_installations += (log.systems_installed || 0);
       total_enrolled += (log.students_enrolled || 0);
       total_attended += (log.students_attended || 0);
-      total_expense += (log.travel_cost || 0) + (log.lodging_cost || 0) + (log.misc_expense || 0);
+
+      if (role === 'admin') {
+        // Admin sees sum of all submitted expenses
+        if (log.expenses) {
+          Object.values(log.expenses).forEach((exp: any) => {
+            if (exp.status === 'submitted') {
+              total_expense += (exp.travel_cost || 0) + (exp.lodging_cost || 0) + (exp.misc_expense || 0);
+            }
+          });
+        } else {
+          // Fallback for old logs
+          total_expense += (log.travel_cost || 0) + (log.lodging_cost || 0) + (log.misc_expense || 0);
+        }
+      } else {
+        // User sees only their own expense
+        if (log.expenses && log.expenses[userId as string]) {
+          const exp = log.expenses[userId as string];
+          if (exp.status === 'submitted') {
+            total_expense += (exp.travel_cost || 0) + (exp.lodging_cost || 0) + (exp.misc_expense || 0);
+          }
+        } else if (log.user_id === userId) {
+          // Fallback for old logs if user is creator
+          total_expense += (log.travel_cost || 0) + (log.lodging_cost || 0) + (log.misc_expense || 0);
+        }
+      }
     });
 
     const successRate = total_enrolled > 0 ? (total_attended / total_enrolled) * 100 : 0;

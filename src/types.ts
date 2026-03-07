@@ -8,10 +8,20 @@ export interface User {
   status: 'active' | 'pending';
 }
 
+export interface UserExpense {
+  travel_cost: number;
+  lodging_cost: number;
+  misc_expense: number;
+  status: 'pending' | 'submitted';
+  submitted_at?: string;
+}
+
 export interface VisitLog {
   id: string;
   user_id: string;
   user_name?: string;
+  user_ids: string[];
+  user_names?: string[];
   client_id: string;
   client_name?: string;
   location_id: string;
@@ -24,9 +34,7 @@ export interface VisitLog {
   students_attended?: number;
   escalation_level?: 'No' | 'Low' | 'Medium' | 'High';
   remarks: string;
-  travel_cost: number;
-  lodging_cost: number;
-  misc_expense: number;
+  expenses: { [userId: string]: UserExpense };
   created_at: string;
 }
 
