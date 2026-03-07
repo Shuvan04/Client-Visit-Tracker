@@ -1574,10 +1574,10 @@ export default function App() {
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -20 }}
-              className="space-y-8"
+              className="space-y-4"
             >
-              <Card className="max-w-xl">
-                <h3 className="text-lg font-bold mb-6">Add New Client</h3>
+              <Card className="max-w-md p-4">
+                <h3 className="text-base font-bold mb-3">Add New Client</h3>
                 <form 
                   onSubmit={async (e) => {
                     e.preventDefault();
@@ -1593,22 +1593,22 @@ export default function App() {
                       showToast('Client added successfully');
                     }
                   }} 
-                  className="flex gap-4"
+                  className="flex gap-2"
                 >
-                  <Input name="clientName" placeholder="Enter client name" required className="flex-1" />
-                  <Button type="submit">Add Client</Button>
+                  <Input name="clientName" placeholder="Enter client name" required className="flex-1 h-9 text-sm" />
+                  <Button type="submit" className="h-9 text-sm py-0 px-4">Add</Button>
                 </form>
               </Card>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-3">
                 {clients.map(c => (
-                  <Card key={c.id} className="flex items-center justify-between p-4">
-                    <span className="font-bold text-gray-900">{c.name}</span>
+                  <Card key={c.id} className="flex items-center justify-between p-2 px-3">
+                    <span className="font-bold text-gray-900 text-sm truncate mr-2">{c.name}</span>
                     <button 
                       onClick={() => setDeletingClient(c)}
-                      className="p-2 text-gray-400 hover:text-red-600 rounded-lg transition-colors"
+                      className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg transition-colors shrink-0"
                     >
-                      <Trash2 size={18} />
+                      <Trash2 size={14} />
                     </button>
                   </Card>
                 ))}
@@ -1622,10 +1622,10 @@ export default function App() {
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -20 }}
-              className="space-y-8"
+              className="space-y-4"
             >
-              <Card className="max-w-xl">
-                <h3 className="text-lg font-bold mb-6">Add New Location</h3>
+              <Card className="max-w-md p-4">
+                <h3 className="text-base font-bold mb-3">Add New Location</h3>
                 <form 
                   onSubmit={async (e) => {
                     e.preventDefault();
@@ -1641,22 +1641,22 @@ export default function App() {
                       showToast('Location added successfully');
                     }
                   }} 
-                  className="flex gap-4"
+                  className="flex gap-2"
                 >
-                  <Input name="locationName" placeholder="Enter location name" required className="flex-1" />
-                  <Button type="submit">Add Location</Button>
+                  <Input name="locationName" placeholder="Enter location name" required className="flex-1 h-9 text-sm" />
+                  <Button type="submit" className="h-9 text-sm py-0 px-4">Add</Button>
                 </form>
               </Card>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-3">
                 {locations.map(l => (
-                  <Card key={l.id} className="flex items-center justify-between p-4">
-                    <span className="font-bold text-gray-900">{l.name}</span>
+                  <Card key={l.id} className="flex items-center justify-between p-2 px-3">
+                    <span className="font-bold text-gray-900 text-sm truncate mr-2">{l.name}</span>
                     <button 
                       onClick={() => setDeletingLocation(l)}
-                      className="p-2 text-gray-400 hover:text-red-600 rounded-lg transition-colors"
+                      className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg transition-colors shrink-0"
                     >
-                      <Trash2 size={18} />
+                      <Trash2 size={14} />
                     </button>
                   </Card>
                 ))}

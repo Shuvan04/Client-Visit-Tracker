@@ -108,6 +108,30 @@ async function seedAdmin() {
   }
 }
 
+// Seed Demo Users
+async function seedDemoUsers() {
+  if (!db) return;
+  const demoUsers = [
+    { username: "demo1@gmail.com", name: "Demo User 1" },
+    { username: "demo2@gmail.com", name: "Demo User 2" }
+  ];
+  
+  for (const demo of demoUsers) {
+    const snapshot = await db.collection('users').where('username', '==', demo.username).get();
+    if (snapshot.empty) {
+      await db.collection('users').add({
+        username: demo.username,
+        password: "demo123",
+        role: "user",
+        name: demo.name,
+        status: "active",
+        created_at: FieldValue.serverTimestamp()
+      });
+      console.log(`[SEED] Added demo user: ${demo.username}`);
+    }
+  }
+}
+
 // Seed Clients and Locations
 async function seedData() {
   if (!db) return;
@@ -160,6 +184,7 @@ async function startServer() {
   if (db) {
     try {
       await seedAdmin();
+      await seedDemoUsers();
       await seedData();
     } catch (seedError) {
       console.error("[SEED ERROR] Seeding failed but continuing to start server:", seedError);
