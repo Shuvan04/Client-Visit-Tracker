@@ -30,8 +30,11 @@ import { User, VisitLog, DashboardStats, Role, Client, ClientLocation } from './
 
 // --- Components ---
 
-const Card = ({ children, className = "" }: { children: React.ReactNode, className?: string, key?: React.Key }) => (
-  <div className={`bg-white rounded-2xl border border-black/5 shadow-sm p-6 ${className}`}>
+const Card = ({ children, className = "", noPadding = false, ...props }: any) => (
+  <div 
+    {...props}
+    className={`bg-white rounded-2xl border border-black/5 shadow-sm transition-all duration-300 ${noPadding ? '' : 'p-6'} ${className}`}
+  >
     {children}
   </div>
 );
@@ -39,27 +42,80 @@ const Card = ({ children, className = "" }: { children: React.ReactNode, classNa
 const Input = (props: React.InputHTMLAttributes<HTMLInputElement>) => (
   <input 
     {...props} 
-    className="w-full px-4 py-2 rounded-xl border border-black/10 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all"
+    className="w-full px-4 py-2.5 rounded-xl border border-black/10 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all text-sm"
   />
 );
 
-const Select = ({ className = "", ...props }: React.SelectHTMLAttributes<HTMLSelectElement>) => (
-  <select 
-    {...props} 
-    className={`w-full px-4 py-2 rounded-xl border border-black/10 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all bg-white ${className}`}
-  />
-);
+const CustomSelect = ({ value, onChange, options, placeholder, className = "", error = false }: { value: string, onChange: (val: string) => void, options: { value: string, label: string }[], placeholder?: string, className?: string, error?: boolean }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const selectedOption = options.find(o => o.value === value);
 
-const Button = ({ children, variant = 'primary', ...props }: any) => {
+  return (
+    <div className={`relative ${className}`}>
+      <div 
+        onClick={() => setIsOpen(!isOpen)}
+        className={`w-full px-4 py-2.5 rounded-2xl border bg-white cursor-pointer flex justify-between items-center min-h-[44px] transition-all duration-300 shadow-sm ${
+          isOpen ? 'border-indigo-500 ring-4 ring-indigo-500/10' : 'border-black/5 hover:border-black/20'
+        } ${error ? 'border-red-500 ring-4 ring-red-500/10' : ''}`}
+      >
+        <span className={`text-sm truncate ${selectedOption ? 'text-gray-900 font-semibold' : 'text-gray-400'}`}>
+          {selectedOption ? selectedOption.label : placeholder || 'Select...'}
+        </span>
+        <ChevronRight size={16} className={`text-gray-400 transition-transform duration-300 ${isOpen ? 'rotate-90' : ''}`} />
+      </div>
+      <AnimatePresence>
+        {isOpen && (
+          <>
+            <div className="fixed inset-0 z-[60]" onClick={() => setIsOpen(false)} />
+            <motion.div
+              initial={{ opacity: 0, y: 10, scale: 0.95 }}
+              animate={{ opacity: 1, y: 4, scale: 1 }}
+              exit={{ opacity: 0, y: 10, scale: 0.95 }}
+              className="absolute left-0 right-0 z-[70] bg-white/90 backdrop-blur-xl rounded-2xl border border-black/5 shadow-2xl p-2 max-h-60 overflow-y-auto custom-scrollbar"
+            >
+              {options.map(opt => (
+                <div
+                  key={opt.value}
+                  onClick={() => {
+                    onChange(opt.value);
+                    setIsOpen(false);
+                  }}
+                  className={`px-4 py-2.5 rounded-xl text-sm cursor-pointer transition-all duration-200 mb-0.5 last:mb-0 ${
+                    value === opt.value 
+                      ? 'bg-indigo-600 text-white font-bold shadow-lg shadow-indigo-200/50' 
+                      : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                  }`}
+                >
+                  {opt.label}
+                </div>
+              ))}
+              {options.length === 0 && (
+                <div className="py-4 text-center text-xs text-gray-400">No options available</div>
+              )}
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+};
+
+const Button = ({ children, variant = 'primary', size = 'md', className = "", ...props }: any) => {
   const variants = {
-    primary: 'bg-indigo-600 text-white hover:bg-indigo-700',
-    secondary: 'bg-white text-gray-700 border border-black/10 hover:bg-gray-50',
+    primary: 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-lg shadow-indigo-200/50',
+    secondary: 'bg-white text-gray-700 border border-black/10 hover:bg-gray-50 hover:border-black/20',
     danger: 'bg-red-50 text-red-600 hover:bg-red-100 border border-red-100',
+    ghost: 'bg-transparent text-gray-500 hover:bg-gray-100 hover:text-gray-900',
+  };
+  const sizes = {
+    sm: 'px-3 py-1.5 text-xs',
+    md: 'px-4 py-2.5 text-sm',
+    lg: 'px-6 py-3 text-base',
   };
   return (
     <button 
       {...props} 
-      className={`px-4 py-2 rounded-xl font-medium transition-all active:scale-95 disabled:opacity-50 ${variants[variant as keyof typeof variants]}`}
+      className={`rounded-xl font-semibold transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2 ${variants[variant as keyof typeof variants]} ${sizes[size as keyof typeof sizes]} ${className}`}
     >
       {children}
     </button>
@@ -89,27 +145,33 @@ const MultiSelect = ({ options, selected, onChange, placeholder }: { options: st
     <div className="relative">
       <div 
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full px-4 py-2 rounded-xl border border-black/10 bg-white cursor-pointer flex justify-between items-center min-h-[42px]"
+        className={`w-full px-4 py-2.5 rounded-2xl border bg-white cursor-pointer flex justify-between items-center min-h-[44px] transition-all duration-300 shadow-sm ${
+          isOpen ? 'border-indigo-500 ring-4 ring-indigo-500/10' : 'border-black/5 hover:border-black/20'
+        }`}
       >
-        <span className="text-sm truncate">
+        <span className={`text-sm truncate ${selected.length > 0 ? 'text-gray-900 font-semibold' : 'text-gray-400'}`}>
           {selected.length === 0 ? placeholder : `${selected.length} selected`}
         </span>
-        <ChevronRight size={16} className={`transition-transform ${isOpen ? 'rotate-90' : ''}`} />
+        <ChevronRight size={16} className={`text-gray-400 transition-transform duration-300 ${isOpen ? 'rotate-90' : ''}`} />
       </div>
       <AnimatePresence>
         {isOpen && (
           <div key="multiselect-dropdown">
             <div className="fixed inset-0 z-[60]" onClick={() => setIsOpen(false)} />
             <motion.div 
-              initial={{ opacity: 0, y: 5 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 5 }}
-              className="absolute top-full left-0 right-0 mt-2 bg-white border border-black/10 rounded-xl shadow-xl z-[70] max-h-60 overflow-y-auto p-2"
+              initial={{ opacity: 0, y: 10, scale: 0.95 }}
+              animate={{ opacity: 1, y: 4, scale: 1 }}
+              exit={{ opacity: 0, y: 10, scale: 0.95 }}
+              className="absolute top-full left-0 right-0 bg-white/90 backdrop-blur-xl border border-black/5 rounded-2xl shadow-2xl z-[70] max-h-60 overflow-y-auto p-2 custom-scrollbar"
             >
               {options.map((opt, i) => (
-                <label key={`${opt}-${i}`} className="flex items-center gap-3 px-3 py-2 hover:bg-gray-50 rounded-lg cursor-pointer">
+                <label key={`${opt}-${i}`} className="flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 rounded-xl cursor-pointer transition-all duration-200 mb-0.5 last:mb-0 group">
+                  <div className={`w-5 h-5 rounded-md border flex items-center justify-center transition-all ${selected.includes(opt) ? 'bg-indigo-600 border-indigo-600' : 'border-gray-300 group-hover:border-indigo-400'}`}>
+                    {selected.includes(opt) && <CheckCircle2 size={12} className="text-white" />}
+                  </div>
                   <input 
                     type="checkbox"
+                    className="hidden"
                     checked={selected.includes(opt)}
                     onChange={() => {
                       if (selected.includes(opt)) {
@@ -118,12 +180,13 @@ const MultiSelect = ({ options, selected, onChange, placeholder }: { options: st
                         onChange([...selected, opt]);
                       }
                     }}
-                    className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
                   />
-                  <span className={`text-sm ${
-                    opt === 'High' ? 'text-red-600 font-bold' : 
-                    opt === 'Medium' ? 'text-orange-600 font-bold' : 
-                    opt === 'Low' ? 'text-yellow-600 font-bold' : 'text-gray-700'
+                  <span className={`text-sm transition-colors ${
+                    selected.includes(opt) ? 'text-gray-900 font-bold' : 'text-gray-600'
+                  } ${
+                    opt === 'High' ? 'text-red-600' : 
+                    opt === 'Medium' ? 'text-orange-600' : 
+                    opt === 'Low' ? 'text-yellow-600' : ''
                   }`}>{opt}</span>
                 </label>
               ))}
@@ -812,17 +875,17 @@ export default function App() {
         <motion.div 
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="w-full max-w-md"
+          className="w-full max-w-md px-4"
         >
-          <div className="text-center mb-8">
-            <div className="w-16 h-16 bg-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg shadow-indigo-200">
-              <ClipboardList className="text-white w-8 h-8" />
+          <div className="text-center mb-10">
+            <div className="w-20 h-20 bg-indigo-600 rounded-[2rem] flex items-center justify-center mx-auto mb-6 shadow-2xl shadow-indigo-200/50 rotate-3 hover:rotate-0 transition-transform duration-500">
+              <ClipboardList className="text-white w-10 h-10" />
             </div>
-            <h1 className="text-3xl font-bold text-gray-900 tracking-tight">Client Visit Tracker</h1>
-            <p className="text-gray-500 mt-2">Sign in to manage your visits</p>
+            <h1 className="text-4xl font-extrabold text-gray-900 tracking-tight mb-2">VisitTracker</h1>
+            <p className="text-gray-500 font-medium">Precision client visit management</p>
           </div>
 
-          <Card className="p-8">
+          <Card className="p-10 shadow-2xl shadow-indigo-100/50 border-white/20">
             {authMode === 'login' && (
               <form onSubmit={handleLogin} className="space-y-6">
                 <div>
@@ -996,76 +1059,77 @@ export default function App() {
   return (
     <div className="min-h-screen bg-[#F8F9FB] flex font-sans">
       {/* Sidebar */}
-      <aside className="w-64 bg-white border-r border-black/5 flex flex-col">
-        <div className="p-6 border-b border-black/5">
+      <aside className="w-72 bg-white/80 backdrop-blur-xl border-r border-black/5 flex flex-col sticky top-0 h-screen z-50">
+        <div className="p-8 border-b border-black/5">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-100">
+            <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center shadow-xl shadow-indigo-200/50">
               <ClipboardList className="text-white w-5 h-5" />
             </div>
-            <span className="font-bold text-gray-900 text-lg">VisitTracker</span>
+            <span className="font-extrabold text-gray-900 text-xl tracking-tight">VisitTracker</span>
           </div>
         </div>
 
-        <nav className="flex-1 p-4 space-y-2">
+        <nav className="flex-1 p-6 space-y-1.5">
           <button 
             onClick={() => setView('dashboard')}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${view === 'dashboard' ? 'bg-indigo-50 text-indigo-600 font-semibold' : 'text-gray-500 hover:bg-gray-50'}`}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-300 ${view === 'dashboard' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200/50 font-bold' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900'}`}
           >
             <LayoutDashboard size={20} />
-            Dashboard
+            <span className="text-sm">Dashboard</span>
           </button>
           
           <button 
             onClick={() => setView('activities')}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${view === 'activities' ? 'bg-indigo-50 text-indigo-600 font-semibold' : 'text-gray-500 hover:bg-gray-50'}`}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-300 ${view === 'activities' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200/50 font-bold' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900'}`}
           >
             <PlusCircle size={20} />
-            Activities
+            <span className="text-sm">Activities</span>
           </button>
 
           <button 
             onClick={() => setView('logs')}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${view === 'logs' ? 'bg-indigo-50 text-indigo-600 font-semibold' : 'text-gray-500 hover:bg-gray-50'}`}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-300 ${view === 'logs' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200/50 font-bold' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900'}`}
           >
             <ClipboardList size={20} />
-            Visit Logs
+            <span className="text-sm">Visit Logs</span>
           </button>
 
           {user.role === 'admin' && (
-            <>
+            <div className="pt-6 space-y-1.5">
+              <p className="px-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Administration</p>
               <button 
                 onClick={() => setView('clients')}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${view === 'clients' ? 'bg-indigo-50 text-indigo-600 font-semibold' : 'text-gray-500 hover:bg-gray-50'}`}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-300 ${view === 'clients' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200/50 font-bold' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900'}`}
               >
                 <Building2 size={20} />
-                Client Management
+                <span className="text-sm">Clients</span>
               </button>
               <button 
                 onClick={() => setView('locations')}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${view === 'locations' ? 'bg-indigo-50 text-indigo-600 font-semibold' : 'text-gray-500 hover:bg-gray-50'}`}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-300 ${view === 'locations' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200/50 font-bold' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900'}`}
               >
                 <Calendar size={20} />
-                Location Management
+                <span className="text-sm">Locations</span>
               </button>
               <button 
                 onClick={() => setView('users')}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${view === 'users' ? 'bg-indigo-50 text-indigo-600 font-semibold' : 'text-gray-500 hover:bg-gray-50'}`}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-300 ${view === 'users' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200/50 font-bold' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900'}`}
               >
                 <Users size={20} />
-                User Management
+                <span className="text-sm">Users</span>
               </button>
-            </>
+            </div>
           )}
         </nav>
 
-        <div className="p-4 border-t border-black/5">
-          <div className="flex items-center gap-3 px-4 py-3 mb-2">
-            <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-600 font-bold text-xs">
+        <div className="p-6 border-t border-black/5">
+          <div className="flex items-center gap-3 px-4 py-3 mb-4 bg-gray-50 rounded-2xl">
+            <div className="w-10 h-10 rounded-xl bg-white shadow-sm flex items-center justify-center text-indigo-600 font-bold text-sm border border-black/5">
               {user.name.charAt(0)}
             </div>
             <div className="flex-1 overflow-hidden">
-              <p className="text-sm font-bold text-gray-900 truncate">{user.name}</p>
-              <p className="text-xs text-gray-500 capitalize">{user.role}</p>
+              <p className="text-sm font-bold text-gray-900 truncate tracking-tight">{user.name}</p>
+              <p className="text-[10px] text-gray-400 uppercase font-bold tracking-wider">{user.role}</p>
             </div>
           </div>
           <button 
@@ -1073,7 +1137,7 @@ export default function App() {
               setUser(null);
               localStorage.removeItem('visit_tracker_session');
             }}
-            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-red-500 hover:bg-red-50 transition-all font-medium"
+            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-red-500 hover:bg-red-50 transition-all duration-300 font-bold text-sm"
           >
             <LogOut size={20} />
             Sign Out
@@ -1111,72 +1175,47 @@ export default function App() {
             >
               {/* Stats Grid */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                <Card className="flex items-center gap-4 relative group h-full hover:shadow-md hover:-translate-y-1 transition-all duration-300 border-blue-100/50">
-                  <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center shrink-0">
-                    <ClipboardList size={24} />
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-sm text-gray-500 font-medium tracking-tight">Total Visits</p>
-                    <p className="text-2xl font-bold text-gray-900">{dashboardStats.total_visits}</p>
-                  </div>
-                  <button 
-                    onClick={() => setShowDetailedVisits(!showDetailedVisits)}
-                    className="absolute bottom-2 right-2 p-1 text-gray-400 hover:text-indigo-600 transition-colors"
-                    title={showDetailedVisits ? "Hide Details" : "Show Details"}
+                {[
+                  { label: 'Total Visits', value: dashboardStats.total_visits, icon: <ClipboardList size={24} />, color: 'blue', border: 'border-blue-100/50', hasToggle: true },
+                  { label: 'Unique Clients', value: dashboardStats.total_clients, icon: <Building2 size={24} />, color: 'indigo', border: 'border-indigo-100/50' },
+                  { label: 'Days Spent', value: dashboardStats.total_days, icon: <Calendar size={24} />, color: 'amber', border: 'border-amber-100/50' },
+                  { label: 'Total Installations', value: dashboardStats.total_installations, icon: <TrendingUp size={24} />, color: 'violet', border: 'border-violet-100/50' },
+                  { label: 'Success Rate', value: `${dashboardStats.success_rate}%`, subValue: `(${dashboardStats.total_attended}/${dashboardStats.total_enrolled})`, icon: <CheckCircle2 size={24} />, color: 'orange', border: 'border-orange-100/50' },
+                  { label: 'Total Expense', value: `₹${(dashboardStats.total_expense || 0).toLocaleString()}`, icon: <IndianRupee size={24} />, color: 'emerald', border: 'border-emerald-100/50' }
+                ].map((stat, i) => (
+                  <motion.div
+                    key={stat.label}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: i * 0.1 }}
                   >
-                    {showDetailedVisits ? <EyeOff size={16} /> : <Eye size={16} />}
-                  </button>
-                </Card>
-                <Card className="flex items-center gap-4 h-full hover:shadow-md hover:-translate-y-1 transition-all duration-300 border-indigo-100/50">
-                  <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center shrink-0">
-                    <Building2 size={24} />
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-sm text-gray-500 font-medium tracking-tight">Unique Clients</p>
-                    <p className="text-2xl font-bold text-gray-900">{dashboardStats.total_clients}</p>
-                  </div>
-                </Card>
-                <Card className="flex items-center gap-4 h-full hover:shadow-md hover:-translate-y-1 transition-all duration-300 border-amber-100/50">
-                  <div className="w-12 h-12 bg-amber-50 text-amber-600 rounded-xl flex items-center justify-center shrink-0">
-                    <Calendar size={24} />
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-sm text-gray-500 font-medium tracking-tight">Days Spent</p>
-                    <p className="text-2xl font-bold text-gray-900">{dashboardStats.total_days}</p>
-                  </div>
-                </Card>
-                <Card className="flex items-center gap-4 h-full hover:shadow-md hover:-translate-y-1 transition-all duration-300 border-violet-100/50">
-                  <div className="w-12 h-12 bg-violet-50 text-violet-600 rounded-xl flex items-center justify-center shrink-0">
-                    <TrendingUp size={24} />
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-sm text-gray-500 font-medium tracking-tight">Total Installations</p>
-                    <p className="text-2xl font-bold text-gray-900">{dashboardStats.total_installations}</p>
-                  </div>
-                </Card>
-                <Card className="flex items-center gap-4 h-full hover:shadow-md hover:-translate-y-1 transition-all duration-300 border-orange-100/50">
-                  <div className="w-12 h-12 bg-orange-50 text-orange-600 rounded-xl flex items-center justify-center shrink-0">
-                    <CheckCircle2 size={24} />
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-sm text-gray-500 font-medium tracking-tight">Success Rate</p>
-                    <p className="text-2xl font-bold text-gray-900">
-                      {dashboardStats.success_rate}%
-                      <span className="text-xs text-gray-400 ml-2 font-normal">
-                        ({dashboardStats.total_attended}/{dashboardStats.total_enrolled})
-                      </span>
-                    </p>
-                  </div>
-                </Card>
-                <Card className="flex items-center gap-4 h-full hover:shadow-md hover:-translate-y-1 transition-all duration-300 border-emerald-100/50">
-                  <div className="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center shrink-0">
-                    <IndianRupee size={24} />
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-sm text-gray-500 font-medium tracking-tight">Total Expense</p>
-                    <p className="text-2xl font-bold text-gray-900">₹{(dashboardStats.total_expense || 0).toLocaleString()}</p>
-                  </div>
-                </Card>
+                    <Card className={`flex items-center gap-4 relative group h-full hover:shadow-xl hover:-translate-y-1 transition-all duration-300 ${stat.border}`}>
+                      <div className={`w-12 h-12 bg-${stat.color}-50 text-${stat.color}-600 rounded-xl flex items-center justify-center shrink-0`}>
+                        {stat.icon}
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-sm text-gray-500 font-bold tracking-tight uppercase text-[10px] opacity-60">{stat.label}</p>
+                        <p className="text-2xl font-extrabold text-gray-900 tracking-tight">
+                          {stat.value}
+                          {stat.subValue && (
+                            <span className="text-xs text-gray-400 ml-2 font-normal">
+                              {stat.subValue}
+                            </span>
+                          )}
+                        </p>
+                      </div>
+                      {stat.hasToggle && (
+                        <button 
+                          onClick={() => setShowDetailedVisits(!showDetailedVisits)}
+                          className="absolute bottom-2 right-2 p-1 text-gray-400 hover:text-indigo-600 transition-colors"
+                          title={showDetailedVisits ? "Hide Details" : "Show Details"}
+                        >
+                          {showDetailedVisits ? <EyeOff size={16} /> : <Eye size={16} />}
+                        </button>
+                      )}
+                    </Card>
+                  </motion.div>
+                ))}
               </div>
 
               {/* Detailed Visits (Conditional) */}
@@ -1332,67 +1371,63 @@ export default function App() {
           {view === 'activities' && (
             <motion.div 
               key="activities"
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -20 }}
-              className="max-w-2xl"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              className="max-w-3xl mx-auto"
             >
-              <Card>
-                <h3 className="text-lg font-bold mb-6">Create New Activity</h3>
-                <form onSubmit={handleCreateActivity} className="space-y-6">
+              <Card className="p-8 shadow-xl shadow-indigo-100/20">
+                <div className="mb-8">
+                  <h3 className="text-xl font-extrabold text-gray-900 tracking-tight">Log New Activity</h3>
+                  <p className="text-gray-500 text-sm">Fill in the details of your client visit below.</p>
+                </div>
+                <form onSubmit={handleCreateActivity} className="space-y-8">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-semibold text-gray-700 mb-2">Client Name</label>
-                      <Select 
-                        required
+                      <CustomSelect 
                         value={activityData.client_id}
-                        onChange={e => setActivityData({ ...activityData, client_id: e.target.value })}
-                      >
-                        <option value="">Select Client...</option>
-                        {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                      </Select>
+                        onChange={val => setActivityData({ ...activityData, client_id: val })}
+                        options={clients.map(c => ({ value: c.id, label: c.name }))}
+                        placeholder="Select Client..."
+                      />
                     </div>
                     <div>
                       <label className="block text-sm font-semibold text-gray-700 mb-2">Location</label>
-                      <Select 
-                        required
+                      <CustomSelect 
                         value={activityData.location_id}
-                        onChange={e => setActivityData({ ...activityData, location_id: e.target.value })}
-                      >
-                        <option value="">Select Location...</option>
-                        {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
-                      </Select>
+                        onChange={val => setActivityData({ ...activityData, location_id: val })}
+                        options={locations.map(l => ({ value: l.id, label: l.name }))}
+                        placeholder="Select Location..."
+                      />
                     </div>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-semibold text-gray-700 mb-2">Purpose</label>
-                      <Select 
+                      <CustomSelect 
                         value={activityData.purpose}
-                        onChange={e => setActivityData({ ...activityData, purpose: e.target.value as any })}
-                      >
-                        <option value="Installation">Installation</option>
-                        <option value="Exam Support">Exam Support</option>
-                        <option value="Exam Support & Installation">Exam Support & Installation</option>
-                      </Select>
+                        onChange={val => setActivityData({ ...activityData, purpose: val as any })}
+                        options={[
+                          { value: 'Installation', label: 'Installation' },
+                          { value: 'Exam Support', label: 'Exam Support' },
+                          { value: 'Exam Support & Installation', label: 'Exam Support & Installation' }
+                        ]}
+                      />
                     </div>
                     <div>
                       <label className="block text-sm font-semibold text-gray-700 mb-2">Escalation Level</label>
-                      <Select 
+                      <CustomSelect 
                         value={activityData.escalation_level}
-                        onChange={e => setActivityData({ ...activityData, escalation_level: e.target.value as any })}
-                        className={
-                          activityData.escalation_level === 'High' ? 'text-red-600 font-bold border-red-200 bg-red-50' : 
-                          activityData.escalation_level === 'Medium' ? 'text-orange-600 font-bold border-orange-200 bg-orange-50' : 
-                          activityData.escalation_level === 'Low' ? 'text-yellow-600 font-bold border-yellow-200 bg-yellow-50' : ''
-                        }
-                      >
-                        <option value="No" className="text-gray-600">No</option>
-                        <option value="Low" className="text-yellow-600 font-bold">Low</option>
-                        <option value="Medium" className="text-orange-600 font-bold">Medium</option>
-                        <option value="High" className="text-red-600 font-bold">High</option>
-                      </Select>
+                        onChange={val => setActivityData({ ...activityData, escalation_level: val as any })}
+                        options={[
+                          { value: 'No', label: 'No' },
+                          { value: 'Low', label: 'Low' },
+                          { value: 'Medium', label: 'Medium' },
+                          { value: 'High', label: 'High' }
+                        ]}
+                      />
                     </div>
                   </div>
 
@@ -1470,10 +1505,10 @@ export default function App() {
                     <div className="space-y-4">
                       <div>
                         <label className="block text-xs font-semibold text-gray-500 mb-1">Number of Employees (0-5)</label>
-                        <Select 
+                        <CustomSelect 
                           value={String(accompaniedCount)}
-                          onChange={e => {
-                            const count = parseInt(e.target.value);
+                          onChange={val => {
+                            const count = parseInt(val);
                             setAccompaniedCount(count);
                             setAccompaniedEmployees(prev => {
                               const next = [...prev];
@@ -1482,27 +1517,22 @@ export default function App() {
                               return next;
                             });
                           }}
-                        >
-                          {[0,1,2,3,4,5].map(n => <option key={n} value={n}>{n}</option>)}
-                        </Select>
+                          options={[0,1,2,3,4,5].map(n => ({ value: String(n), label: String(n) }))}
+                        />
                       </div>
                       {Array.from({ length: accompaniedCount }).map((_, i) => (
                         <div key={i}>
                           <label className="block text-xs font-semibold text-gray-500 mb-1">Employee {i + 1}</label>
-                          <Select 
-                            required
-                            value={accompaniedEmployees[i] || ''}
-                            onChange={e => {
-                              const newEmployees = [...accompaniedEmployees];
-                              newEmployees[i] = e.target.value;
-                              setAccompaniedEmployees(newEmployees);
-                            }}
-                          >
-                            <option value="">Select Employee...</option>
-                            {allUsers.filter(u => u.id !== user?.id && (!accompaniedEmployees.includes(u.id) || accompaniedEmployees[i] === u.id)).map(u => (
-                              <option key={u.id} value={u.id}>{u.name}</option>
-                            ))}
-                          </Select>
+                        <CustomSelect 
+                          value={accompaniedEmployees[i] || ''}
+                          onChange={val => {
+                            const newEmployees = [...accompaniedEmployees];
+                            newEmployees[i] = val;
+                            setAccompaniedEmployees(newEmployees);
+                          }}
+                          options={allUsers.filter(u => u.id !== user?.id && (!accompaniedEmployees.includes(u.id) || accompaniedEmployees[i] === u.id)).map(u => ({ value: u.id, label: u.name }))}
+                          placeholder="Select Employee..."
+                        />
                         </div>
                       ))}
                     </div>
@@ -1703,8 +1733,14 @@ export default function App() {
               </Card>
 
               <div className="grid grid-cols-1 gap-4">
-                {filteredLogs.map(log => (
-                  <Card key={log.id} className="hover:border-indigo-200 transition-all group">
+                {filteredLogs.map((log, i) => (
+                  <motion.div
+                    key={log.id}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: Math.min(i * 0.05, 0.5) }}
+                  >
+                    <Card className="hover:border-indigo-200 hover:shadow-md transition-all group">
                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                       <div className="flex items-start gap-4">
                         <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${log.purpose === 'Installation' ? 'bg-blue-50 text-blue-600' : 'bg-orange-50 text-orange-600'}`}>
@@ -1869,7 +1905,8 @@ export default function App() {
                       </div>
                     </div>
                   </Card>
-                ))}
+                </motion.div>
+              ))}
                 {filteredLogs.length === 0 && (
                   <div className="text-center py-20 bg-white rounded-2xl border border-dashed border-gray-200">
                     <ClipboardList className="mx-auto text-gray-300 mb-4" size={48} />
@@ -1998,13 +2035,14 @@ export default function App() {
                     </div>
                     <div>
                       <label className="block text-sm font-semibold text-gray-700 mb-2">Role</label>
-                      <Select 
+                      <CustomSelect 
                         value={editingUser ? editingUser.role : newUserData.role}
-                        onChange={e => editingUser ? setEditingUser({ ...editingUser, role: e.target.value as Role }) : setNewUserData({ ...newUserData, role: e.target.value as Role })}
-                      >
-                        <option value="user">User</option>
-                        <option value="admin">Admin</option>
-                      </Select>
+                        onChange={val => editingUser ? setEditingUser({ ...editingUser, role: val as Role }) : setNewUserData({ ...newUserData, role: val as Role })}
+                        options={[
+                          { value: 'user', label: 'User' },
+                          { value: 'admin', label: 'Admin' }
+                        ]}
+                      />
                     </div>
                   </div>
                   <div className="flex gap-3">
@@ -2071,29 +2109,36 @@ export default function App() {
       {/* Edit Modal */}
       <AnimatePresence>
         {isModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-6">
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 md:p-6">
             <motion.div 
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={closeVisitModal}
-              className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+              className="absolute inset-0 bg-gray-900/60 backdrop-blur-md"
             />
             <motion.div 
-              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              initial={{ opacity: 0, scale: 0.9, y: 40 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="relative w-full max-w-2xl bg-white rounded-2xl shadow-2xl overflow-hidden"
+              exit={{ opacity: 0, scale: 0.9, y: 40 }}
+              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+              className="relative w-full max-w-2xl bg-white rounded-[2rem] shadow-2xl overflow-hidden border border-white/20"
             >
-              <div className="p-6 border-b border-black/5 flex justify-between items-center">
-                <h3 className="text-xl font-bold text-gray-900">
-                  {isSubmittingExpense ? 'Add Your Expenses' : (editingLog ? 'Edit Visit Log' : 'Create New Visit Log')}
-                </h3>
-                <button onClick={closeVisitModal} className="text-gray-400 hover:text-gray-600">
-                  <X size={24} />
+              <div className="p-8 border-b border-black/5 flex justify-between items-center bg-gray-50/50">
+                <div>
+                  <h3 className="text-2xl font-extrabold text-gray-900 tracking-tight">
+                    {isSubmittingExpense ? 'Add Your Expenses' : (editingLog ? 'Edit Visit Log' : 'Create New Visit Log')}
+                  </h3>
+                  <p className="text-gray-500 text-sm mt-1">Please provide the required information below.</p>
+                </div>
+                <button 
+                  onClick={closeVisitModal} 
+                  className="w-10 h-10 rounded-full bg-white shadow-sm border border-black/5 flex items-center justify-center text-gray-400 hover:text-gray-900 hover:rotate-90 transition-all duration-300"
+                >
+                  <X size={20} />
                 </button>
               </div>
-              <div className="p-6 max-h-[80vh] overflow-y-auto">
+              <div className="p-8 max-h-[75vh] overflow-y-auto custom-scrollbar">
                 <form 
                   onSubmit={isSubmittingExpense ? (e) => {
                     e.preventDefault();
@@ -2106,56 +2151,49 @@ export default function App() {
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
                           <label className="block text-sm font-semibold text-gray-700 mb-2">Client Name</label>
-                          <Select 
-                            required
+                          <CustomSelect 
                             value={activityData.client_id}
-                            onChange={e => setActivityData({ ...activityData, client_id: e.target.value })}
-                          >
-                            <option value="">Select Client...</option>
-                            {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                          </Select>
+                            onChange={val => setActivityData({ ...activityData, client_id: val })}
+                            options={clients.map(c => ({ value: c.id, label: c.name }))}
+                            placeholder="Select Client..."
+                          />
                         </div>
                         <div>
                           <label className="block text-sm font-semibold text-gray-700 mb-2">Location</label>
-                          <Select 
-                            required
+                          <CustomSelect 
                             value={activityData.location_id}
-                            onChange={e => setActivityData({ ...activityData, location_id: e.target.value })}
-                          >
-                            <option value="">Select Location...</option>
-                            {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
-                          </Select>
+                            onChange={val => setActivityData({ ...activityData, location_id: val })}
+                            options={locations.map(l => ({ value: l.id, label: l.name }))}
+                            placeholder="Select Location..."
+                          />
                         </div>
                       </div>
 
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
                           <label className="block text-sm font-semibold text-gray-700 mb-2">Purpose</label>
-                          <Select 
+                          <CustomSelect 
                             value={activityData.purpose}
-                            onChange={e => setActivityData({ ...activityData, purpose: e.target.value as any })}
-                          >
-                            <option value="Installation">Installation</option>
-                            <option value="Exam Support">Exam Support</option>
-                            <option value="Exam Support & Installation">Exam Support & Installation</option>
-                          </Select>
+                            onChange={val => setActivityData({ ...activityData, purpose: val as any })}
+                            options={[
+                              { value: 'Installation', label: 'Installation' },
+                              { value: 'Exam Support', label: 'Exam Support' },
+                              { value: 'Exam Support & Installation', label: 'Exam Support & Installation' }
+                            ]}
+                          />
                         </div>
                         <div>
                           <label className="block text-sm font-semibold text-gray-700 mb-2">Escalation Level</label>
-                          <Select 
+                          <CustomSelect 
                             value={activityData.escalation_level}
-                            onChange={e => setActivityData({ ...activityData, escalation_level: e.target.value as any })}
-                            className={
-                              activityData.escalation_level === 'High' ? 'text-red-600 font-bold border-red-200 bg-red-50' : 
-                              activityData.escalation_level === 'Medium' ? 'text-orange-600 font-bold border-orange-200 bg-orange-50' : 
-                              activityData.escalation_level === 'Low' ? 'text-yellow-600 font-bold border-yellow-200 bg-yellow-50' : ''
-                            }
-                          >
-                            <option value="No" className="text-gray-600">No</option>
-                            <option value="Low" className="text-yellow-600 font-bold">Low</option>
-                            <option value="Medium" className="text-orange-600 font-bold">Medium</option>
-                            <option value="High" className="text-red-600 font-bold">High</option>
-                          </Select>
+                            onChange={val => setActivityData({ ...activityData, escalation_level: val as any })}
+                            options={[
+                              { value: 'No', label: 'No' },
+                              { value: 'Low', label: 'Low' },
+                              { value: 'Medium', label: 'Medium' },
+                              { value: 'High', label: 'High' }
+                            ]}
+                          />
                         </div>
                       </div>
 
@@ -2234,10 +2272,10 @@ export default function App() {
                           <div className="space-y-4">
                             <div>
                               <label className="block text-xs font-semibold text-gray-500 mb-1">Number of Employees (0-5)</label>
-                              <Select 
+                              <CustomSelect 
                                 value={String(accompaniedCount)}
-                                onChange={e => {
-                                  const count = parseInt(e.target.value);
+                                onChange={val => {
+                                  const count = parseInt(val);
                                   setAccompaniedCount(count);
                                   setAccompaniedEmployees(prev => {
                                     const next = [...prev];
@@ -2246,27 +2284,22 @@ export default function App() {
                                     return next;
                                   });
                                 }}
-                              >
-                                {[0,1,2,3,4,5].map(n => <option key={n} value={n}>{n}</option>)}
-                              </Select>
+                                options={[0,1,2,3,4,5].map(n => ({ value: String(n), label: String(n) }))}
+                              />
                             </div>
                             {Array.from({ length: accompaniedCount }).map((_, i) => (
                               <div key={i}>
                                 <label className="block text-xs font-semibold text-gray-500 mb-1">Employee {i + 1}</label>
-                                <Select 
-                                  required
+                                <CustomSelect 
                                   value={accompaniedEmployees[i] || ''}
-                                  onChange={e => {
+                                  onChange={val => {
                                     const newEmployees = [...accompaniedEmployees];
-                                    newEmployees[i] = e.target.value;
+                                    newEmployees[i] = val;
                                     setAccompaniedEmployees(newEmployees);
                                   }}
-                                >
-                                  <option value="">Select Employee...</option>
-                                  {allUsers.filter(u => u.id !== user?.id && (!accompaniedEmployees.includes(u.id) || accompaniedEmployees[i] === u.id)).map(u => (
-                                    <option key={u.id} value={u.id}>{u.name}</option>
-                                  ))}
-                                </Select>
+                                  options={allUsers.filter(u => u.id !== user?.id && (!accompaniedEmployees.includes(u.id) || accompaniedEmployees[i] === u.id)).map(u => ({ value: u.id, label: u.name }))}
+                                  placeholder="Select Employee..."
+                                />
                               </div>
                             ))}
                           </div>
