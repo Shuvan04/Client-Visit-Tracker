@@ -685,7 +685,14 @@ async function startServer() {
       const start = new Date(log.date_from);
       const end = new Date(log.date_to);
       const durationInHours = (end.getTime() - start.getTime()) / (1000 * 60 * 60);
-      const days = Math.max(0.5, Math.ceil(durationInHours / 12) * 0.5);
+      
+      const fullDays = Math.floor(durationInHours / 24);
+      const remainingHours = durationInHours % 24;
+      let extraDays = 0;
+      if (remainingHours > 0) {
+        extraDays = remainingHours < 7 ? 0.5 : 1;
+      }
+      const days = fullDays + extraDays;
       
       total_days += days;
       total_installations += (log.systems_installed || 0);
